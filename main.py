@@ -1,54 +1,48 @@
 import urllib.request
 import tensorflow as tf
-import tensorflow.contrib.slim as slim
-import tensorflow.contrib.slim.python.slim
-from tensorflow.contrib.slim.nets import resnet_v2
-from tfmodels.research.slim.preprocessing import inception_preprocessing
+from model import EncoderResNet152
+from data_loader import ImageDecoder
+from preprocess import ImagePreprocessor
 from tfmodels.research.slim.datasets import imagenet
 
-IMAGE_SIZE = 224
-NUM_CLASSES = 1001
-graph = tf.Graph()
+
+def get_label(probabilities):
+    sorted_inds = []
+    names = imagenet.create_readable_names_for_imagenet_labels()
+    for probability in probabilities:
+        sorted_inds.append(
+            [i[0] for i in sorted(enumerate(-probability), key=lambda x: x[1])])
+
+    for i, sorted_ind in enumerate(sorted_inds):
+        for j in range(5):
+            index = sorted_ind[j]
+            print('Probability %0.2f%% => [%s]' %
+                  (100 * probabilities[i][index], names[index]))
 
 
-with graph.as_default():
-    # image for sampling
-    image_bytes = tf.placeholder(tf.string)
-    image = tf.image.decode_jpeg(image_bytes, channels=3)
-    preprocessed_image = inception_preprocessing.preprocess_image(
-        image, IMAGE_SIZE, IMAGE_SIZE)
-    preprocessed_images = tf.expand_dims(preprocessed_image, 0)
+with tf.Session() as sess:
+    # load sample
+    url = "https://static.independent.co.uk/s3fs-public/thumbnails/image/2017/03/23/17/electricplane.jpg?w968h681"
+    image_bytes = urllib.request.urlopen(url).read()
+    images_bytes = tf.constant([image_bytes], dtype=tf.string)
 
-    with slim.arg_scope(resnet_v2.resnet_arg_scope()):
-        net, end_point = resnet_v2.resnet_v2_152(
-            preprocessed_images, num_classes=NUM_CLASSES, is_training=False)
+    # decode sample
+    image_decoder = ImageDecoder()
+    images = image_decoder.decode(images_bytes)
+
+    # preprocess
+    image_preprocessor = ImagePreprocessor()
+    preprocessed_images = image_preprocessor.preprocess(images)
+
+    # build model
+    resnet_152 = EncoderResNet152()
+    net, end_point = resnet_152.build(preprocessed_images)
     logits = tf.squeeze(net, [1, 2])
     probabilities = tf.nn.softmax(logits)
+    resnet_152.init_fn(sess)
+    print('finish build model')
 
-    checkpoint = "./model/resnet_v2_152_2017_04_14/resnet_v2_152.ckpt"
-    init_fn = slim.assign_from_checkpoint_fn(
-        checkpoint, slim.get_variables_to_restore())
+    # predict
+    probabilities = sess.run(probabilities)
 
-with tf.Session(graph=graph) as sess:
-    # restore from checkpoint
-    init_fn(sess)
-
-    # load sample
-    url = "https://upload.wikimedia.org/wikipedia/commons/7/70/EnglishCockerSpaniel_simon.jpg"
-    image_bytes_1 = urllib.request.urlopen(url).read()
-
-    # predict sample
-    probabilities = sess.run(probabilities, feed_dict={
-                             image_bytes: image_bytes_1})
-    probabilities = probabilities[0, 0:]
-    sorted_inds = [i[0]
-                   for i in sorted(enumerate(-probabilities),
-                                   key=lambda x:x[1])]
-    names = imagenet.create_readable_names_for_imagenet_labels()
-    result_text = ''
-    for i in range(5):
-        index = sorted_inds[i]
-        print('Probability %0.2f%% => [%s]' %
-              (100*probabilities[index], names[index]))
-    result_text += str(names[sorted_inds[0]])+'=>' + \
-        str("{0:.2f}".format(100*probabilities[sorted_inds[0]]))+'%\n'
+    get_label(probabilities)

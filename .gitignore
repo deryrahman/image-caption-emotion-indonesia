@@ -1,3 +1,4 @@
 *env
 dataset
-model
+pretrained
+__pycache__

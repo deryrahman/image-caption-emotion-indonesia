@@ -1,4 +1,3 @@
-import tensorflow as tf
 from tensorflow.contrib import slim
 from tensorflow.contrib.slim.nets import resnet_v2
 
@@ -24,7 +23,10 @@ class EncoderResNet152():
         return net, end_point
 
 
-class FactoredLSTM():
+class DecoderFactoredLSTM():
 
     def __init__(self):
+        pass
+
+    def build(self):
         pass

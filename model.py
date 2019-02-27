@@ -42,7 +42,7 @@ class NIC():
 
         # decoder LSTM
         decoder_lstm = LSTM(
-            self.hidden_size, return_sequence=True,
+            self.hidden_size, return_sequences=True,
             name='decoder_lstm')(embedding)
         output = TimeDistributed(
             Dense(self.vocab_size, activation='softmax',

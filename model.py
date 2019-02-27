@@ -1,5 +1,5 @@
 from keras.applications.resnet_v2 import ResNet152V2
-from keras.layers import Input, TimeDistributed, Dense, LSTM, Embedding, concatenate
+from keras.layers import Input, Dense, LSTM, Embedding, concatenate
 from keras.models import Model
 
 IMAGE_SIZE = 224
@@ -41,12 +41,9 @@ class NIC():
                                 name='embedding')
 
         # decoder LSTM
-        decoder_lstm = LSTM(
-            self.hidden_size, return_sequences=True,
-            name='decoder_lstm')(embedding)
-        output = TimeDistributed(
-            Dense(self.vocab_size, activation='softmax',
-                  name='output'))(decoder_lstm)
+        decoder_lstm = LSTM(self.hidden_size, name='decoder_lstm')(embedding)
+        output = Dense(
+            self.vocab_size, activation='softmax', name='output')(decoder_lstm)
 
         self.model = Model(inputs=[image_input, word_input], outputs=output)
 

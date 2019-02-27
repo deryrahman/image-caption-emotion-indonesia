@@ -1,53 +1,60 @@
-import tensorflow as tf
+from keras.preprocessing import image
+from keras.applications.resnet_v2 import preprocess_input
 import glob
-tf.train.string_input_producer
-
-
-class ImageDecoder():
-    """Helper class for decoding images"""
-
-    def decode(self, images_bytes):
-        """Decode tensor images_bytes dtype=tf.string with rank 2, dimension (None, None)
-        into tensor images with rank 4, dimension (None, None, None, 3), [batch, height, width, channels]
-
-        Arguments:
-            images_bytes {tensor} -- tensor string dtype=tf.string with dimension [batch, bytes]
-        
-        Returns:
-            images {tensor} -- tensor rank 4 [batch, height, width, channels]
-        """
-
-        func = lambda x: tf.image.decode_jpeg(x, channels=3)
-        images = tf.map_fn(func, images_bytes, dtype=tf.uint8)
-        assert len(images.shape) == 4
-        assert images.shape[3] == 3
-        return images
+import numpy as np
+import json
 
 
 class ImageLoader():
     """Helper class for load image"""
 
-    def load(self, path_folder, extension='jpg'):
-        """Load image from path_folder. Currently only support jpg
-        
-        Arguments:
-            path_folder {str} -- path folder
-            extension {str} -- extension, eg. jpg (default: {'jpg'})
-        
-        Returns:
-            image_bytes {tensor} -- tensor rank 2 [batch, bytes]
-        """
+    def load(self, filename, target_size=(224, 224), extension='jpg'):
 
         if extension != 'jpg':
             raise Exception('{} must be jpg'.format(extension))
+
+        img = image.load_img(filename, target_size=target_size)
+        img = image.img_to_array(img)
+        img = np.expand_dims(img, axis=0)
+        img = preprocess_input(img)
+
+        return img
+
+    def load_from_folder(self,
+                         path_folder,
+                         target_size=(224, 224),
+                         extension='jpg'):
+
         filenames = glob.glob('{}/*.{}'.format(path_folder, extension))
-        filenames = tf.convert_to_tensor(filenames, dtype=tf.string)
-        images_bytes = tf.map_fn(tf.read_file, filenames)
+        images_bytes = {}
+
+        for filename in filenames:
+            name = filename.split('/')[-1].split('.')[-2]
+            images_bytes[name] = self.load(
+                filename, target_size=target_size, extension=extension)
+
         return images_bytes
 
 
-# image_loader = ImageLoader()
-# a = image_loader.load(path_folder='./dataset/example/')
-# image_decoder = ImageDecoder()
-# b = image_decoder.decode(a)
-# print(b)
+class CaptionLoader():
+    """Helper class for load captions"""
+
+    def load(self,
+             filename,
+             preprocess=lambda text: text,
+             caption_modes=['id', 'en']):
+        mapping_caption = {mode: {} for mode in caption_modes}
+
+        with open(filename, 'r') as f:
+            data = json.load(f)
+
+        for d in data:
+            k = d['image_id']
+            for mode in caption_modes:
+                mapping_caption[mode][k] = []
+            for captions in d['captions']:
+                for mode in caption_modes:
+                    captions[mode] = preprocess(captions[mode])
+                    mapping_caption[mode][k].append(captions[mode])
+
+        return mapping_caption

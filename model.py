@@ -4,11 +4,8 @@ from keras.models import Model
 from keras.optimizers import RMSprop
 from keras.utils.np_utils import np
 from nn import FactoredLSTM
-from keras.callbacks import Callback
+from loss import sparse_cross_entropy
 import tensorflow as tf
-
-IMAGE_SIZE = 224
-NUM_CLASSES = 1001
 
 
 class NIC():
@@ -23,8 +20,9 @@ class NIC():
         self.state_size = state_size
         self.embedding_size = embedding_size
         self.model = None
+        self._build()
 
-    def build(self):
+    def _build(self):
         # image embedding
         transfer_values_input = Input(
             shape=(self.transfer_values_size,), name='transfer_values_input')
@@ -66,29 +64,20 @@ class NIC():
             loss=sparse_cross_entropy,
             target_tensors=[decoder_target])
 
-    def get_model(self):
-        if not self.model:
-            self.build()
-        return self.model
-
 
 class EncoderResNet152():
 
     def __init__(self, weights='imagenet'):
         self.weights = weights
         self.model = None
+        self._build()
 
-    def build(self):
+    def _build(self):
         # from pretrained model
         image_model = ResNet152V2(include_top=True, weights=self.weights)
         transfer_layer = image_model.get_layer('avg_pool')
         self.model = Model(
             inputs=image_model.input, outputs=transfer_layer.output)
-
-    def get_model(self):
-        if not self.model:
-            self.build()
-        return self.model
 
 
 class StyleNet():
@@ -167,8 +156,8 @@ class StyleNet():
         for layer in self.model.layers:
             if layer.name == 'decoder_factored_lstm':
                 for weight, value in zip(layer.weights, layer.get_weights()):
-                    name = weight.name.split(':')[0]
-                    if name == 'decoder_factored_lstm/kernel_S':
+                    name = weight.name.split(':')[0].split('/')[1]
+                    if name == 'kernel_S_{}'.format(self.mode):
                         np.save('{}.kernel_S.{}'.format(path, self.mode), value)
                         break
                 break
@@ -180,28 +169,10 @@ class StyleNet():
             if layer.name == 'decoder_factored_lstm':
                 weights = []
                 for weight, value in zip(layer.weights, layer.get_weights()):
-                    name = weight.name.split(':')[0]
-                    if name == 'decoder_factored_lstm/kernel_S':
+                    name = weight.name.split(':')[0].split('/')[1]
+                    if name == 'kernel_S_{}'.format(self.mode):
                         weights.append(kernel_S_value)
                     else:
                         weights.append(value)
                 self.model.layers[i].set_weights(weights)
                 break
-
-
-def sparse_cross_entropy(y_true, y_pred):
-    loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
-        labels=y_true, logits=y_pred)
-    loss_mean = tf.reduce_mean(loss)
-
-    return loss_mean
-
-
-class ModelCheckpoint(Callback):
-
-    def __init__(self, architecture, filepath):
-        self.architecture = architecture
-        self.filepath = filepath
-
-    def on_epoch_end(self, epoch, logs=None):
-        self.architecture.save(self.filepath)

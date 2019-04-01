@@ -1,6 +1,11 @@
 from keras.applications.resnet_v2 import ResNet152V2
-from keras.layers import Input, Dense, LSTM, Embedding, concatenate
+from keras.layers import Input, Dense, LSTM, Embedding
 from keras.models import Model
+from keras.optimizers import RMSprop
+from keras.utils.np_utils import np
+from nn import FactoredLSTM
+from keras.callbacks import Callback
+import tensorflow as tf
 
 IMAGE_SIZE = 224
 NUM_CLASSES = 1001
@@ -9,43 +14,57 @@ NUM_CLASSES = 1001
 class NIC():
 
     def __init__(self,
-                 token_len,
-                 vocab_size,
-                 num_image_features=2048,
-                 hidden_size=512,
-                 embedding_size=512):
-        self.token_len = token_len
-        self.vocab_size = vocab_size
-        self.num_image_features = num_image_features
-        self.hidden_size = hidden_size
+                 num_words=10000,
+                 transfer_values_size=2048,
+                 state_size=512,
+                 embedding_size=128):
+        self.num_words = num_words
+        self.transfer_values_size = transfer_values_size
+        self.state_size = state_size
         self.embedding_size = embedding_size
         self.model = None
 
     def build(self):
         # image embedding
-        image_input = Input(
-            shape=(1, self.num_image_features), name='image_input')
-        image_embedding = Dense(
-            self.embedding_size, name='image_embedding')(image_input)
+        transfer_values_input = Input(
+            shape=(self.transfer_values_size,), name='transfer_values_input')
+        decoder_transfer_map = Dense(
+            self.state_size, activation='tanh', name='decoder_transfer_map')
 
         # word embedding
-        word_input = Input(shape=(self.token_len,), name='word_input')
-        word_embedding = Embedding(
-            input_dim=self.vocab_size,
+        decoder_input = Input(shape=(None,), name='decoder_input')
+        decoder_embedding = Embedding(
+            input_dim=self.num_words,
             output_dim=self.embedding_size,
-            name='word_embedding')(word_input)
-
-        # concatenate
-        embedding = concatenate([image_embedding, word_embedding],
-                                axis=1,
-                                name='embedding')
+            name='decoder_embedding')
 
         # decoder LSTM
-        decoder_lstm = LSTM(self.hidden_size, name='decoder_lstm')(embedding)
-        output = Dense(
-            self.vocab_size, activation='softmax', name='output')(decoder_lstm)
+        decoder_lstm = LSTM(
+            self.state_size, name='decoder_lstm', return_sequences=True)
+        decoder_dense = Dense(
+            self.num_words, activation='linear', name='decoder_output')
 
-        self.model = Model(inputs=[image_input, word_input], outputs=output)
+        # connect decoder
+        initial_state = decoder_transfer_map(transfer_values_input)
+        net = decoder_input
+        net = decoder_embedding(net)
+        net = decoder_lstm(net, initial_state=(initial_state, initial_state))
+        decoder_output = decoder_dense(net)
+
+        # create model
+        self.model = Model(
+            inputs=[transfer_values_input, decoder_input],
+            outputs=[decoder_output])
+
+        # RMS optimizer
+        optimizer = RMSprop(lr=1e-3)
+
+        # compile model
+        decoder_target = tf.placeholder(dtype='int32', shape=(None, None))
+        self.model.compile(
+            optimizer=optimizer,
+            loss=sparse_cross_entropy,
+            target_tensors=[decoder_target])
 
     def get_model(self):
         if not self.model:
@@ -61,9 +80,10 @@ class EncoderResNet152():
 
     def build(self):
         # from pretrained model
-        resnet_152 = ResNet152V2(weights=self.weights)
+        image_model = ResNet152V2(include_top=True, weights=self.weights)
+        transfer_layer = image_model.get_layer('avg_pool')
         self.model = Model(
-            inputs=resnet_152.input, outputs=resnet_152.layers[-2].output)
+            inputs=image_model.input, outputs=transfer_layer.output)
 
     def get_model(self):
         if not self.model:
@@ -71,10 +91,117 @@ class EncoderResNet152():
         return self.model
 
 
-class DecoderFactoredLSTM():
+class StyleNet():
 
-    def __init__(self):
-        pass
+    def __init__(self,
+                 mode='factual',
+                 num_words=10000,
+                 transfer_values_size=2048,
+                 state_size=512,
+                 embedding_size=128,
+                 factored_size=256):
+        self.mode = mode
+        self.num_words = num_words
+        self.transfer_values_size = transfer_values_size
+        self.state_size = state_size
+        self.embedding_size = embedding_size
+        self.factored_size = factored_size
+        self.model = None
+        self._build()
 
-    def build(self):
-        pass
+    def _build(self):
+        # image embedding
+        self.transfer_values_input = Input(
+            shape=(self.transfer_values_size,), name='transfer_values_input')
+        self.decoder_transfer_map = Dense(
+            self.state_size,
+            activation='tanh',
+            name='decoder_transfer_map',
+            trainable=self.mode == 'factual')
+
+        # word embedding
+        self.decoder_input = Input(shape=(None,), name='decoder_input')
+        self.decoder_embedding = Embedding(
+            input_dim=self.num_words,
+            output_dim=self.embedding_size,
+            name='decoder_embedding',
+            trainable=self.mode == 'factual')
+
+        # decoder LSTM
+        self.decoder_factored_lstm = FactoredLSTM(
+            self.state_size,
+            mode=self.mode,
+            name='decoder_factored_lstm',
+            return_sequences=True)
+        self.decoder_dense = Dense(
+            self.num_words,
+            activation='linear',
+            name='decoder_output',
+            trainable=self.mode == 'factual')
+
+        # connect decoder
+        initial_state = self.decoder_transfer_map(self.transfer_values_input)
+        net = self.decoder_input
+        net = self.decoder_embedding(net)
+        net = self.decoder_factored_lstm(
+            net, initial_state=(initial_state, initial_state))
+        decoder_output = self.decoder_dense(net)
+
+        # create model
+        self.model = Model(
+            inputs=[self.transfer_values_input, self.decoder_input],
+            outputs=[decoder_output])
+
+        # RMS optimizer
+        optimizer = RMSprop(lr=1e-3)
+
+        # compile model
+        decoder_target = tf.placeholder(dtype='int32', shape=(None, None))
+        self.model.compile(
+            optimizer=optimizer,
+            loss=sparse_cross_entropy,
+            target_tensors=[decoder_target])
+
+    def save(self, path):
+        self.model.save_weights(path, overwrite=True)
+        for layer in self.model.layers:
+            if layer.name == 'decoder_factored_lstm':
+                for weight, value in zip(layer.weights, layer.get_weights()):
+                    name = weight.name.split(':')[0]
+                    if name == 'decoder_factored_lstm/kernel_S':
+                        np.save('{}.kernel_S.{}'.format(path, self.mode), value)
+                        break
+                break
+
+    def load(self, path):
+        self.model.load_weights(path, by_name=True)
+        kernel_S_value = np.load('{}.kernel_S.{}'.format(path, self.mode))
+        for i, layer in enumerate(self.model.layers):
+            if layer.name == 'decoder_factored_lstm':
+                weights = []
+                for weight, value in zip(layer.weights, layer.get_weights()):
+                    name = weight.name.split(':')[0]
+                    if name == 'decoder_factored_lstm/kernel_S':
+                        weights.append(kernel_S_value)
+                    else:
+                        weights.append(value)
+                self.model.layers[i].set_weights(weights)
+                break
+
+
+def sparse_cross_entropy(y_true, y_pred):
+    loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
+        labels=y_true, logits=y_pred)
+    loss_mean = tf.reduce_mean(loss)
+
+    return loss_mean
+
+
+class ModelCheckpoint(Callback):
+
+    def __init__(self, architecture, filepath):
+        self.architecture = architecture
+        self.filepath = filepath
+
+    def on_epoch_end(self, epoch, logs=None):
+        self.architecture.save(self.filepath)

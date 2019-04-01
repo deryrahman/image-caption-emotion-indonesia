@@ -1,3 +1,0 @@
-# Pretrained
-
-Contain pretrained model

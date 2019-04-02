@@ -1,7 +1,7 @@
 from keras.applications.resnet_v2 import ResNet152V2
 from keras.layers import Input, Dense, LSTM, Embedding
 from keras.models import Model
-from keras.optimizers import RMSprop
+from keras.optimizers import Adam
 from keras.utils.np_utils import np
 from nn import FactoredLSTM
 from loss import sparse_cross_entropy
@@ -14,11 +14,19 @@ class NIC():
                  num_words=10000,
                  transfer_values_size=2048,
                  state_size=512,
-                 embedding_size=128):
+                 embedding_size=128,
+                 learning_rate=0.0002,
+                 beta_1=0.9,
+                 beta_2=0.999,
+                 epsilon=1e-08):
         self.num_words = num_words
         self.transfer_values_size = transfer_values_size
         self.state_size = state_size
         self.embedding_size = embedding_size
+        self.learning_rate = learning_rate
+        self.beta_1 = beta_1
+        self.beta_2 = beta_2
+        self.epsilon = epsilon
         self.model = None
         self._build()
 
@@ -54,8 +62,12 @@ class NIC():
             inputs=[transfer_values_input, decoder_input],
             outputs=[decoder_output])
 
-        # RMS optimizer
-        optimizer = RMSprop(lr=1e-3)
+        # Adam optimizer
+        optimizer = Adam(
+            lr=self.learning_rate,
+            beta_1=self.beta_1,
+            beta_2=self.beta_2,
+            epsilon=self.epsilon)
 
         # compile model
         decoder_target = tf.placeholder(dtype='int32', shape=(None, None))
@@ -88,13 +100,23 @@ class StyleNet():
                  transfer_values_size=2048,
                  state_size=512,
                  embedding_size=128,
-                 factored_size=256):
+                 factored_size=256,
+                 learning_rate=0.0002,
+                 beta_1=0.9,
+                 beta_2=0.999,
+                 epsilon=1e-08,
+                 lstm_layers=1):
         self.mode = mode
         self.num_words = num_words
         self.transfer_values_size = transfer_values_size
         self.state_size = state_size
         self.embedding_size = embedding_size
         self.factored_size = factored_size
+        self.learning_rate = learning_rate
+        self.beta_1 = beta_1
+        self.beta_2 = beta_2
+        self.epsilon = epsilon
+        self.lstm_layers = lstm_layers
         self.model = None
         self._build()
 
@@ -117,11 +139,14 @@ class StyleNet():
             trainable=self.mode == 'factual')
 
         # decoder LSTM
-        self.decoder_factored_lstm = FactoredLSTM(
-            self.state_size,
-            mode=self.mode,
-            name='decoder_factored_lstm',
-            return_sequences=True)
+        self.decoder_factored_lstm = []
+        for i in range(self.lstm_layers):
+            self.decoder_factored_lstm.append(
+                FactoredLSTM(
+                    self.state_size,
+                    mode=self.mode,
+                    name='decoder_factored_lstm_{}'.format(i),
+                    return_sequences=True))
         self.decoder_dense = Dense(
             self.num_words,
             activation='linear',
@@ -132,8 +157,9 @@ class StyleNet():
         initial_state = self.decoder_transfer_map(self.transfer_values_input)
         net = self.decoder_input
         net = self.decoder_embedding(net)
-        net = self.decoder_factored_lstm(
-            net, initial_state=(initial_state, initial_state))
+        for i in range(self.lstm_layers):
+            net = self.decoder_factored_lstm[i](
+                net, initial_state=(initial_state, initial_state))
         decoder_output = self.decoder_dense(net)
 
         # create model
@@ -141,8 +167,12 @@ class StyleNet():
             inputs=[self.transfer_values_input, self.decoder_input],
             outputs=[decoder_output])
 
-        # RMS optimizer
-        optimizer = RMSprop(lr=1e-3)
+        # Adam optimizer
+        optimizer = Adam(
+            lr=self.learning_rate,
+            beta_1=self.beta_1,
+            beta_2=self.beta_2,
+            epsilon=self.epsilon)
 
         # compile model
         decoder_target = tf.placeholder(dtype='int32', shape=(None, None))
@@ -154,7 +184,7 @@ class StyleNet():
     def save(self, path):
         self.model.save_weights(path, overwrite=True)
         for layer in self.model.layers:
-            if layer.name == 'decoder_factored_lstm':
+            if layer.name[:-2] == 'decoder_factored_lstm':
                 for weight, value in zip(layer.weights, layer.get_weights()):
                     name = weight.name.split(':')[0].split('/')[1]
                     if name == 'kernel_S_{}'.format(self.mode):
@@ -166,7 +196,7 @@ class StyleNet():
         self.model.load_weights(path, by_name=True)
         kernel_S_value = np.load('{}.kernel_S.{}'.format(path, self.mode))
         for i, layer in enumerate(self.model.layers):
-            if layer.name == 'decoder_factored_lstm':
+            if layer.name[:-2] == 'decoder_factored_lstm':
                 weights = []
                 for weight, value in zip(layer.weights, layer.get_weights()):
                     name = weight.name.split(':')[0].split('/')[1]

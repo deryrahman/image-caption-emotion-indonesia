@@ -4,8 +4,10 @@ Contain dataset of partial MSCOCO and Flickr30k
 
 ### Path
 ```
-    -- flickr10k
-    -- mscoco10k
+    - flickr10k -- contain flickr dataset
+    - mscoco -- contain mscoco dataset
+    - dump -- contain mongo dump from imagecaption.geekstudio.id
+    - cache -- contain helper, such image id to index
 ```
 
 ### Data

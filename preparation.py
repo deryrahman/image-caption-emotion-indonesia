@@ -37,11 +37,13 @@ def split_and_save(captions, path_folder, seed=0, train_num=9000):
         f.write('\n'.join(validation_indexes))
 
 
-def load_caption(path_folder):
+def load_caption(path_folder, modes=['happy', 'sad', 'angry']):
     filenames_train = ()
-    captions_train = ()
+    captions_train = {mode: () for mode in modes}
+    captions_train.update({'factual': ()})
     filenames_val = ()
-    captions_val = ()
+    captions_val = {mode: () for mode in modes}
+    captions_val.update({'factual': ()})
     with open(path_folder + '/caption.json', 'r') as f:
         data = json.load(f)
         with open(path_folder + '/train.txt', 'r') as f2:
@@ -53,10 +55,24 @@ def load_caption(path_folder):
             filename = d['filename']
             if idx in train_indexes:
                 filenames_train += (filename,)
-                captions_train += ([cap['id'] for cap in d['captions']],)
+                captions_train['factual'] += ([
+                    cap['id'] for cap in d['captions']
+                ],)
+                for mode in modes:
+                    caption_with_mode = d['emotions'].get(mode)
+                    captions_train[mode] += ([
+                        caption_with_mode if caption_with_mode else ''
+                    ],)
             elif idx in validation_indexes:
                 filenames_val += (filename,)
-                captions_val += ([cap['id'] for cap in d['captions']],)
+                captions_val['factual'] += ([
+                    cap['id'] for cap in d['captions']
+                ],)
+                for mode in modes:
+                    caption_with_mode = d['emotions'].get(mode)
+                    captions_val[mode] += ([
+                        caption_with_mode if caption_with_mode else ''
+                    ],)
     return (filenames_train, captions_train), (filenames_val, captions_val)
 
 

@@ -28,6 +28,12 @@ class FactoredLSTMCell(LSTMCell):
                 self.bias_initializer((self.units * 2,), *args, **kwargs),
             ])
 
+        self.kernel_S = self.add_weight(
+            shape=(self.factored_dim, self.factored_dim * 4),
+            name='kernel_S_{}'.format(self.mode),
+            initializer=self.kernel_initializer,
+            regularizer=self.kernel_regularizer,
+            constraint=self.kernel_constraint)
         self.kernel_V = self.add_weight(
             shape=(input_dim, self.factored_dim * 4),
             name='kernel_V',
@@ -35,12 +41,6 @@ class FactoredLSTMCell(LSTMCell):
             regularizer=self.kernel_regularizer,
             constraint=self.kernel_constraint,
             trainable=self.mode == 'factual')
-        self.kernel_S = self.add_weight(
-            shape=(self.factored_dim, self.factored_dim * 4),
-            name='kernel_S_{}'.format(self.mode),
-            initializer=self.kernel_initializer,
-            regularizer=self.kernel_regularizer,
-            constraint=self.kernel_constraint)
         self.kernel_U = self.add_weight(
             shape=(self.factored_dim, self.units * 4),
             name='kernel_U',

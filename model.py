@@ -188,20 +188,33 @@ class StyleNet():
                 for weight, value in zip(layer.weights, layer.get_weights()):
                     name = weight.name.split(':')[0].split('/')[1]
                     if name == 'kernel_S_{}'.format(self.mode):
-                        np.save('{}.kernel_S.{}'.format(path, self.mode), value)
+                        np.save('{}.kernel_S.{}.npy'.format(path, self.mode),
+                                value)
                         break
                 break
 
     def load(self, path):
-        self.model.load_weights(path, by_name=True)
-        kernel_S_value = np.load('{}.kernel_S.{}'.format(path, self.mode))
+        self.model.load_weights(path, by_name=True, skip_mismatch=True)
+        try:
+            kernel_S_value = np.load('{}.kernel_S.{}.npy'.format(
+                path, self.mode))
+        except IOError as e:
+            print(e)
+            print('But it\'s ok, it will be skipped')
+            return
         for i, layer in enumerate(self.model.layers):
             if layer.name[:-2] == 'decoder_factored_lstm':
                 weights = []
                 for weight, value in zip(layer.weights, layer.get_weights()):
                     name = weight.name.split(':')[0].split('/')[1]
                     if name == 'kernel_S_{}'.format(self.mode):
-                        weights.append(kernel_S_value)
+                        if value.shape == kernel_S_value.shape:
+                            weights.append(kernel_S_value)
+                        else:
+                            print(
+                                'Shape of kernel_S didn\'t match, {} expected, but {} detected, load with initial value'
+                                .format(value.shape, kernel_S_value.shape))
+                            weights.append(value)
                     else:
                         weights.append(value)
                 self.model.layers[i].set_weights(weights)

@@ -183,17 +183,20 @@ class StyleNet():
 
     def save(self, path):
         self.model.save_weights(path, overwrite=True)
+        weight_values = []
         for layer in self.model.layers:
             if layer.name[:-2] == 'decoder_factored_lstm':
                 for weight, value in zip(layer.weights, layer.get_weights()):
                     name = weight.name.split(':')[0].split('/')[1]
                     if name == 'kernel_S_{}'.format(self.mode):
-                        np.save('{}.kernel_S.{}.npy'.format(path, self.mode),
-                                value)
+                        weight_values.append([value])
                         break
-                break
+        np.save('{}.kernel_S.{}.npy'.format(path, self.mode), weight_values)
 
     def load(self, path):
+        initial_weight_kernel_S = self._get_weight_values(
+            layer_name='decoder_factored_lstm',
+            weight_name='kernel_S_{}'.format(self.mode))
         self.model.load_weights(path, by_name=True, skip_mismatch=True)
         try:
             kernel_S_value = np.load('{}.kernel_S.{}.npy'.format(
@@ -201,21 +204,49 @@ class StyleNet():
         except IOError as e:
             print(e)
             print('But it\'s ok, it will be skipped')
-            return
+            kernel_S_value = initial_weight_kernel_S
+        self._set_weight_values(
+            layer_name='decoder_factored_lstm',
+            weight_values=kernel_S_value,
+            weight_name='kernel_S_{}'.format(self.mode))
+
+    def _get_weight_values(self, layer_name, weight_name=None):
+        weight_values = []
         for i, layer in enumerate(self.model.layers):
-            if layer.name[:-2] == 'decoder_factored_lstm':
-                weights = []
+            if layer.name[:-2] == layer_name:
+                if not weight_name:
+                    weight_values.append(layer.get_weights())
+                    continue
                 for weight, value in zip(layer.weights, layer.get_weights()):
                     name = weight.name.split(':')[0].split('/')[1]
-                    if name == 'kernel_S_{}'.format(self.mode):
-                        if value.shape == kernel_S_value.shape:
-                            weights.append(kernel_S_value)
-                        else:
-                            print(
-                                'Shape of kernel_S didn\'t match, {} expected, but {} detected, load with initial value'
-                                .format(value.shape, kernel_S_value.shape))
+                    if name != weight_name:
+                        continue
+                    weight_values.append([value])
+                    break
+        return weight_values
+
+    def _set_weight_values(self, layer_name, weight_values, weight_name=None):
+        layer_target_i = 0
+        for layer in self.model.layers:
+            if layer.name[:-2] == layer_name:
+                layer_target_i += 1
+        if layer_target_i != len(weight_values):
+            raise ValueError(
+                'length of weight_values didn\'t match with layer count in model, expect {} got {}'
+                .format(layer_target_i, len(weight_values)))
+        layer_target_i = 0
+        for i, layer in enumerate(self.model.layers):
+            if layer.name[:-2] == layer_name:
+                weights = []
+                if not weight_name:
+                    weights = weight_values[layer_target_i]
+                else:
+                    for weight, value in zip(layer.weights,
+                                             layer.get_weights()):
+                        name = weight.name.split(':')[0].split('/')[1]
+                        if name != weight_name:
                             weights.append(value)
-                    else:
-                        weights.append(value)
+                            continue
+                        weights.append(weight_values[layer_target_i][0])
                 self.model.layers[i].set_weights(weights)
-                break
+                layer_target_i += 1

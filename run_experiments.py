@@ -180,18 +180,50 @@ if __name__ == "__main__":
     epsilon = [1e-08]
 
     emotions = ['happy', 'sad', 'angry']
-    train(
-        dataset='flickr',
-        mode='factual',
-        num_words=10000,
-        batch_size=64,
-        start_epoch=0,
-        epoch=20,
-        lstm_layers=2,
-        lstm_units=512,
-        factored_size=512,
-        embedding_size=300,
-        learning_rate=0.0002,
-        beta_1=0.9,
-        beta_2=0.999,
-        epsilon=1e-08)
+    for lstm_l in lstm_layers:
+        for factored_sz in factored_size:
+            for ep_i in range(len(epoch['factual'])):
+                # first train factual
+                ep = epoch['factual'][ep_i]
+                print(
+                    '########## config: \n - epoch {}\n - lstm_layers {}\n - factored_size {}\n'
+                    .format(ep, lstm_l, factored_sz))
+                print(
+                    '========================== TRAIN FACTUAL =========================='
+                )
+                train(
+                    dataset='flickr',
+                    mode='factual',
+                    num_words=10000,
+                    batch_size=batch_size['factual'][0],
+                    start_epoch=0,
+                    epoch=ep,
+                    lstm_layers=lstm_l,
+                    lstm_units=lstm_units[0],
+                    factored_size=factored_sz,
+                    embedding_size=embedding_size[0],
+                    learning_rate=learning_rate['factual'][0],
+                    beta_1=beta_1[0],
+                    beta_2=beta_2[0],
+                    epsilon=epsilon[0])
+                # then train emotion
+                ep = epoch['emotion'][ep_i]
+                for mode in emotions:
+                    print(
+                        '========================== TRAIN {} =========================='
+                        .format(mode))
+                    train(
+                        dataset='flickr',
+                        mode=mode,
+                        num_words=10000,
+                        batch_size=batch_size['emotion'][0],
+                        start_epoch=0,
+                        epoch=ep,
+                        lstm_layers=lstm_l,
+                        lstm_units=lstm_units[0],
+                        factored_size=factored_sz,
+                        embedding_size=embedding_size[0],
+                        learning_rate=learning_rate['emotion'][0],
+                        beta_1=beta_1[0],
+                        beta_2=beta_2[0],
+                        epsilon=epsilon[0])

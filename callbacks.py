@@ -7,7 +7,7 @@ class ModelCheckpoint(Callback):
     def __init__(self, architecture, filepath, monitor='loss', verbose=1):
         super(ModelCheckpoint, self).__init__()
         self.architecture = architecture
-        self.filepath = filepath + '.epoch-{epoch}'
+        self.filepath = filepath
         self.monitor = monitor
         self.verbose = verbose
         self.monitor_op = np.less

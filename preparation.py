@@ -37,11 +37,13 @@ def split_and_save(captions, path_folder, seed=0, train_num=9000):
         f.write('\n'.join(validation_indexes))
 
 
-def load_caption(path_folder, modes=['happy', 'sad', 'angry']):
-    filenames_train = ()
+def load_caption(path_folder, lang='id', modes=['happy', 'sad', 'angry']):
+    filenames_train = {mode: () for mode in modes}
+    filenames_train.update({'factual': ()})
     captions_train = {mode: () for mode in modes}
     captions_train.update({'factual': ()})
-    filenames_val = ()
+    filenames_val = {mode: () for mode in modes}
+    filenames_val.update({'factual': ()})
     captions_val = {mode: () for mode in modes}
     captions_val.update({'factual': ()})
     with open(path_folder + '/caption.json', 'r') as f:
@@ -54,25 +56,25 @@ def load_caption(path_folder, modes=['happy', 'sad', 'angry']):
             idx = d['filename'].split('.')[0]
             filename = d['filename']
             if idx in train_indexes:
-                filenames_train += (filename,)
+                filenames_train['factual'] += (filename,)
                 captions_train['factual'] += ([
-                    cap['id'] for cap in d['captions']
+                    cap[lang] for cap in d['captions']
                 ],)
                 for mode in modes:
                     caption_with_mode = d['emotions'].get(mode)
-                    captions_train[mode] += ([
-                        caption_with_mode if caption_with_mode else ''
-                    ],)
+                    if caption_with_mode is not None:
+                        filenames_train[mode] += (filename,)
+                        captions_train[mode] += ([caption_with_mode],)
             elif idx in validation_indexes:
-                filenames_val += (filename,)
+                filenames_val['factual'] += (filename,)
                 captions_val['factual'] += ([
-                    cap['id'] for cap in d['captions']
+                    cap[lang] for cap in d['captions']
                 ],)
                 for mode in modes:
                     caption_with_mode = d['emotions'].get(mode)
-                    captions_val[mode] += ([
-                        caption_with_mode if caption_with_mode else ''
-                    ],)
+                    if caption_with_mode is not None:
+                        filenames_val[mode] += (filename,)
+                        captions_val[mode] += ([caption_with_mode],)
     return (filenames_train, captions_train), (filenames_val, captions_val)
 
 
@@ -122,6 +124,33 @@ def invoke_emotion_to_dataset(mongo_dump_path, image_id_to_idx, dataset_folder,
     with open(dataset_folder + '/caption.json', 'w') as f:
         json.dump(caption, f)
     return caption
+
+
+def invoke_edited_to_dataset(mongo_dump_path, dataset_folder):
+    mp = {}
+    with open(mongo_dump_path, 'r') as f:
+        lines = f.readlines()
+        for line in lines:
+            test = json.loads(line)
+            for cap in test['captions']:
+                if len(cap['captionEdit']) == 0:
+                    continue
+                for tmp in cap['captionEdit']:
+                    caption_id = tmp['caption_id']
+                    if mp.get(caption_id) is None:
+                        mp[caption_id] = []
+                    mp[caption_id].append(tmp['text'])
+    with open(dataset_folder + '/caption.json', 'r') as f:
+        data = json.load(f)
+    for j in range(len(data)):
+        for i, tt in enumerate(data[j]['captions']):
+            caption_id = tt['caption_id']
+            if mp.get(caption_id) is None:
+                data[j]['captions'][i]['edited'] = tt['id']
+            else:
+                data[j]['captions'][i]['edited'] = mp[caption_id][0]
+    with open(dataset_folder + '/caption.json', 'w') as f:
+        json.dump(data, f)
 
 
 if __name__ == '__main__':

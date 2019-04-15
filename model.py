@@ -1,16 +1,18 @@
 from keras.applications.resnet_v2 import ResNet152V2
-from keras.layers import Input, Dense, LSTM, Embedding
+from keras.layers import Input, Dense, LSTM, Embedding, Concatenate, Reshape
 from keras.models import Model
 from keras.optimizers import Adam
 from keras.utils.np_utils import np
 from nn import FactoredLSTM
 from loss import sparse_cross_entropy
+from keras.utils import plot_model
 import tensorflow as tf
 
 
 class NIC():
 
     def __init__(self,
+                 injection_mode='init',
                  num_words=10000,
                  transfer_values_size=2048,
                  state_size=512,
@@ -19,6 +21,7 @@ class NIC():
                  beta_1=0.9,
                  beta_2=0.999,
                  epsilon=1e-08):
+        self.injection_mode = injection_mode
         self.num_words = num_words
         self.transfer_values_size = transfer_values_size
         self.state_size = state_size
@@ -34,8 +37,17 @@ class NIC():
         # image embedding
         transfer_values_input = Input(
             shape=(self.transfer_values_size,), name='transfer_values_input')
-        decoder_transfer_map = Dense(
-            self.state_size, activation='tanh', name='decoder_transfer_map')
+        if self.injection_mode == 'init':
+            decoder_transfer_map = Dense(
+                self.state_size, activation='tanh', name='decoder_transfer_map')
+        elif self.injection_mode == 'pre':
+            decoder_transfer_map = Dense(
+                self.embedding_size,
+                activation='tanh',
+                name='decoder_transfer_map')
+            decoder_transfer_map_reshape = Reshape(
+                target_shape=(1, self.embedding_size))
+            concatenate = Concatenate(axis=1)
 
         # word embedding
         decoder_input = Input(shape=(None,), name='decoder_input')
@@ -54,7 +66,13 @@ class NIC():
         initial_state = decoder_transfer_map(transfer_values_input)
         net = decoder_input
         net = decoder_embedding(net)
-        net = decoder_lstm(net, initial_state=(initial_state, initial_state))
+        if self.injection_mode == 'init':
+            net = decoder_lstm(
+                net, initial_state=(initial_state, initial_state))
+        elif self.injection_mode == 'pre':
+            initial_state = decoder_transfer_map_reshape(initial_state)
+            net = concatenate([initial_state, net])
+            net = decoder_lstm(net)
         decoder_output = decoder_dense(net)
 
         # create model
@@ -75,6 +93,7 @@ class NIC():
             optimizer=optimizer,
             loss=sparse_cross_entropy,
             target_tensors=[decoder_target])
+        plot_model(self.model, to_file='nic.png', show_shapes=True)
 
 
 class EncoderResNet152():
@@ -96,6 +115,7 @@ class StyleNet():
 
     def __init__(self,
                  mode='factual',
+                 injection_mode='init',
                  num_words=10000,
                  transfer_values_size=2048,
                  state_size=512,
@@ -106,6 +126,7 @@ class StyleNet():
                  beta_2=0.999,
                  epsilon=1e-08,
                  lstm_layers=1):
+        self.injection_mode = injection_mode
         self.mode = mode
         self.num_words = num_words
         self.transfer_values_size = transfer_values_size
@@ -122,49 +143,65 @@ class StyleNet():
 
     def _build(self):
         # image embedding
-        self.transfer_values_input = Input(
+        transfer_values_input = Input(
             shape=(self.transfer_values_size,), name='transfer_values_input')
-        self.decoder_transfer_map = Dense(
-            self.state_size,
-            activation='tanh',
-            name='decoder_transfer_map',
-            trainable=self.mode == 'factual')
+        if self.injection_mode == 'init':
+            decoder_transfer_map = Dense(
+                self.state_size,
+                activation='tanh',
+                name='decoder_transfer_map',
+                trainable=self.mode == 'factual')
+        elif self.injection_mode == 'pre':
+            decoder_transfer_map = Dense(
+                self.embedding_size,
+                activation='tanh',
+                name='decoder_transfer_map',
+                trainable=self.mode == 'factual')
+            decoder_transfer_map_reshape = Reshape(
+                target_shape=(1, self.embedding_size))
+            concatenate = Concatenate(axis=1)
 
         # word embedding
-        self.decoder_input = Input(shape=(None,), name='decoder_input')
-        self.decoder_embedding = Embedding(
+        decoder_input = Input(shape=(None,), name='decoder_input')
+        decoder_embedding = Embedding(
             input_dim=self.num_words,
             output_dim=self.embedding_size,
             name='decoder_embedding',
             trainable=self.mode == 'factual')
 
         # decoder LSTM
-        self.decoder_factored_lstm = []
+        decoder_factored_lstm = []
         for i in range(self.lstm_layers):
-            self.decoder_factored_lstm.append(
+            decoder_factored_lstm.append(
                 FactoredLSTM(
                     self.state_size,
                     mode=self.mode,
                     name='decoder_factored_lstm_{}'.format(i),
                     return_sequences=True))
-        self.decoder_dense = Dense(
+        decoder_dense = Dense(
             self.num_words,
             activation='linear',
             name='decoder_output',
             trainable=self.mode == 'factual')
 
         # connect decoder
-        initial_state = self.decoder_transfer_map(self.transfer_values_input)
-        net = self.decoder_input
-        net = self.decoder_embedding(net)
-        for i in range(self.lstm_layers):
-            net = self.decoder_factored_lstm[i](
-                net, initial_state=(initial_state, initial_state))
-        decoder_output = self.decoder_dense(net)
+        initial_state = decoder_transfer_map(self.transfer_values_input)
+        net = decoder_input
+        net = decoder_embedding(net)
+        if self.injection_mode == 'init':
+            for i in range(self.lstm_layers):
+                net = decoder_factored_lstm[i](
+                    net, initial_state=(initial_state, initial_state))
+        elif self.injection_mode == 'pre':
+            initial_state = decoder_transfer_map_reshape(initial_state)
+            net = concatenate([initial_state, net])
+            for i in range(self.lstm_layers):
+                net = decoder_factored_lstm[i](net)
+        decoder_output = decoder_dense(net)
 
         # create model
         self.model = Model(
-            inputs=[self.transfer_values_input, self.decoder_input],
+            inputs=[transfer_values_input, decoder_input],
             outputs=[decoder_output])
 
         # Adam optimizer
@@ -180,6 +217,7 @@ class StyleNet():
             optimizer=optimizer,
             loss=sparse_cross_entropy,
             target_tensors=[decoder_target])
+        plot_model(self.model, to_file='stylenet.png', show_shapes=True)
 
     def save(self, path):
         self.model.save_weights(path, overwrite=True)

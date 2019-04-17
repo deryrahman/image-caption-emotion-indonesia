@@ -2,24 +2,33 @@ from keras.preprocessing.sequence import pad_sequences
 import numpy as np
 
 
-def get_random_caption_tokens(idx, tokens_train):
+def get_random_caption_tokens(ids, tokens):
     result = []
 
-    for i in idx:
-        j = np.random.choice(len(tokens_train[i]))
-        tokens = tokens_train[i][j]
-        result.append(tokens)
+    for i in ids:
+        j = np.random.choice(len(tokens[i]))
+        result.append(tokens[i][j])
 
     return result
 
 
-def batch_generator(batch_size, num_images_train, transfer_values_train,
-                    tokens_train):
+def batch_generator(batch_size,
+                    filenames,
+                    transfer_values,
+                    tokens,
+                    with_transfer_values=True):
+    filenames = np.array(filenames)
     while True:
-        idx = np.random.randint(num_images_train, size=batch_size)
-        transfer_values = transfer_values_train[idx]
+        ids = np.random.randint(len(filenames), size=batch_size)
 
-        tokens = get_random_caption_tokens(idx, tokens_train)
+        if with_transfer_values:
+            partial_filenames = filenames[ids]
+            partial_transfer_values = []
+            for filename in partial_filenames:
+                partial_transfer_values.append(transfer_values[filename])
+            partial_transfer_values = np.array(partial_transfer_values)
+
+        tokens = get_random_caption_tokens(ids, tokens)
 
         max_tokens = np.max([len(t) for t in tokens])
         tokens_padded = pad_sequences(
@@ -28,10 +37,13 @@ def batch_generator(batch_size, num_images_train, transfer_values_train,
         decoder_input_data = tokens_padded[:, 0:-1]
         decoder_output_data = tokens_padded[:, 1:]
 
-        x_data = {
-            'decoder_input': decoder_input_data,
-            'transfer_values_input': transfer_values
-        }
+        if with_transfer_values:
+            x_data = {
+                'decoder_input': decoder_input_data,
+                'transfer_values_input': partial_transfer_values
+            }
+        else:
+            x_data = {'decoder_input': decoder_input_data}
 
         y_data = {'decoder_output': decoder_output_data}
 

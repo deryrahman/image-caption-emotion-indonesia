@@ -343,16 +343,15 @@ def invoke_edited_to_dataset(mongo_dump_path, dataset_folder):
         contents = json.load(f)
 
     for i in range(len(contents)):
-        data = contents[i]
-        for j, cap in enumerate(data['captions']):
+        for j, cap in enumerate(contents[i]['captions']):
             caption_id = cap['caption_id']
             if mp.get(caption_id) is None:
-                data['captions'][j]['edited'] = cap['id']
+                contents[i]['captions'][j]['edited'] = cap['id']
             else:
-                data['captions'][j]['edited'] = mp[caption_id][0]
+                contents[i]['captions'][j]['edited'] = mp[caption_id][0]
 
     with open(dataset_folder + '/captions.json', 'w') as f:
-        json.dump(data, f)
+        json.dump(contents, f)
 
 
 if __name__ == '__main__':

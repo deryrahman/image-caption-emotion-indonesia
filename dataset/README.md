@@ -7,7 +7,6 @@ Contain dataset of partial MSCOCO and Flickr30k
     - flickr10k -- contain flickr dataset
     - mscoco -- contain mscoco dataset
     - dump -- contain mongo dump from imagecaption.geekstudio.id
-    - cache -- contain helper, such image id to index
 ```
 
 ### Data
@@ -15,13 +14,18 @@ Contain dataset of partial MSCOCO and Flickr30k
 path format :
     - /img/ -- contain images
     - /cache/ -- contain cache
-    - /caption.json -- contain caption
-    - /train.txt -- contain list of filename train
-    - /val.txt -- contain list of filename validation
+    - /captions.json -- contain all captions data
+    - /factual
+        - /captions.json -- only contain list of list captions
+        - /filenames.json -- list of filenames
+        - train.txt -- indexes for train
+        - val.txt -- indexes for validation
+        - test.txt -- indexes for test
 
-format caption.json :
+format captions.json (all captions data version):
     - {
-        'filename': 000123.jpg
+        'image_id': 331-flickr,
+        'filename': 000123.jpg,
         'captions': [
             {'id': 'Bahasa Indonesia',
              'en' : 'English'},

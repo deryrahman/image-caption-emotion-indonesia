@@ -39,7 +39,7 @@ def process_images(folder_path,
     image_batch = np.zeros(shape=shape, dtype=np.float16)
 
     shape = (num_images, transfer_values_size)
-    transfer_values = np.zeros(shape=shape, dtype=np.float16)
+    values = np.zeros(shape=shape, dtype=np.float16)
 
     start_index = 0
 
@@ -57,36 +57,36 @@ def process_images(folder_path,
             img = load_image(path, size=img_size)
             image_batch[i] = img
 
-        transfer_values[start_index:end_index] = image_model_transfer.predict(
+        values[start_index:end_index] = image_model_transfer.predict(
             image_batch[:current_batch_size])
 
         start_index = end_index
     print()
 
-    return transfer_values
+    return values
 
 
 def process_images_all(folder_path,
-                       is_train,
                        filenames,
                        img_size,
                        transfer_values_size,
                        image_model_transfer,
                        batch_size=32):
-    print("Processing {} images in {}-set ...".format(
-        len(filenames), 'training' if is_train else 'validation'))
+    print("Processing {} images ...".format(len(filenames)))
 
     path = folder_path + '/cache'
-    cache_path = path + ("/transfer_values_train.pkl"
-                         if is_train else "/transfer_values_val.pkl")
+    cache_path = path + ("/transfer_values.pkl")
 
     if os.path.isfile(cache_path):
         with open(cache_path, 'rb') as f:
             transfer_values = pickle.load(f)
     else:
-        transfer_values = process_images(folder_path, filenames, img_size,
-                                         transfer_values_size,
-                                         image_model_transfer, batch_size)
+        values = process_images(folder_path, filenames, img_size,
+                                transfer_values_size, image_model_transfer,
+                                batch_size)
+        transfer_values = {}
+        for filename, val in zip(filenames, values):
+            transfer_values[filename] = val
         with open(cache_path, 'wb') as f:
             pickle.dump(transfer_values, f)
 

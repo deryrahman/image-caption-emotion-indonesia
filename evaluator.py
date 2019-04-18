@@ -15,13 +15,13 @@ def bleu_evaluator(captions_listlist, predictions_list):
     bleu_2 = corpus_bleu(
         list_of_references=captions_listlist,
         hypotheses=predictions_list,
-        weights=(0, 1, 0, 0))
+        weights=(0.5, 0.5, 0, 0))
     bleu_3 = corpus_bleu(
         list_of_references=captions_listlist,
         hypotheses=predictions_list,
-        weights=(0, 0, 1, 0))
+        weights=(0.33, 0.33, 0.33, 0))
     bleu_4 = corpus_bleu(
         list_of_references=captions_listlist,
         hypotheses=predictions_list,
-        weights=(0, 0, 0, 1))
+        weights=(0.25, 0.25, 0.25, 0.25))
     return bleu_1, bleu_2, bleu_3, bleu_4

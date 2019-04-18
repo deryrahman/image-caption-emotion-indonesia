@@ -5,7 +5,7 @@ from keras.optimizers import Adam
 from keras.utils.np_utils import np
 from nn import FactoredLSTM
 from loss import sparse_cross_entropy
-from keras.utils import plot_model
+# from keras.utils import plot_model
 import tensorflow as tf
 import os
 
@@ -109,7 +109,7 @@ class NIC():
             optimizer=optimizer,
             loss=sparse_cross_entropy,
             target_tensors=[decoder_target])
-        plot_model(self.model, to_file='nic.png', show_shapes=True)
+        # plot_model(self.model, to_file='nic.png', show_shapes=True)
 
 
 class EncoderResNet152():
@@ -238,7 +238,7 @@ class StyleNet():
             optimizer=optimizer,
             loss=sparse_cross_entropy,
             target_tensors=[decoder_target])
-        plot_model(self.model, to_file='stylenet.png', show_shapes=True)
+        # plot_model(self.model, to_file='stylenet.png', show_shapes=True)
 
     def save(self, path, overwrite):
         if self.mode == 'factual':

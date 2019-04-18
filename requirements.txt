@@ -1,4 +1,5 @@
 tensorflow==1.13.1
 nltk==3.4
 pydot==1.4.1
+nltk==3.4
 git+git://github.com/keras-team/keras.git@c3eb62763fcc5029c26b025ba1b60d7788d491a1

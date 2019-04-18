@@ -38,9 +38,13 @@ def main(args):
 
     modes = ['happy', 'sad', 'angry']
     for mode in ['factual'] + modes:
+        print(mode)
         train_indexes, val_indexes, test_indexes = split_dataset(
             all_filenames[mode], all_captions[mode],
             dataset_folder + '/' + mode, tokenizer, val, test)
+        print('train length', len(train_indexes))
+        print('val length', len(val_indexes))
+        print('test length', len(test_indexes))
         save_dataset(all_filenames[mode], all_captions[mode],
                      dataset_folder + '/' + mode, train_indexes, val_indexes,
                      test_indexes)

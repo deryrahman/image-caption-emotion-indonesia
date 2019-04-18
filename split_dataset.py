@@ -20,9 +20,9 @@ def main(args):
                 all_filenames[mode].append(data['filename'])
                 all_captions[mode].append([data['emotions'][mode]])
     all_filenames['factual'] = [data['filename'] for data in caption_data]
-    all_captions['factual'] = [
-        [caption['id'] for caption in data['captions']] for data in caption_data
-    ]
+    all_captions['factual'] = [[
+        caption['edited'] for caption in data['captions']
+    ] for data in caption_data]
 
     modes = ['happy', 'sad', 'angry']
     captions_flat_all = []

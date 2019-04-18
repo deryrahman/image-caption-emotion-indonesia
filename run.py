@@ -9,6 +9,7 @@ from callbacks import ModelCheckpoint
 from keras.callbacks import TensorBoard, EarlyStopping
 from evaluator import bleu_evaluator
 from predictor import generate_caption
+from tensorflow.core.protobuf import rewriter_config_pb2
 import tensorflow as tf
 import numpy as np
 import argparse
@@ -36,6 +37,9 @@ def main(args):
     batch_size = args.batch_size
 
     config = tf.ConfigProto()
+    off = rewriter_config_pb2.RewriterConfig.OFF
+    config.graph_options.rewrite_options.memory_optimization = off
+
     config.gpu_options.allow_growth = True
     config.gpu_options.per_process_gpu_memory_fraction = gpu_frac
     K.tensorflow_backend.set_session(tf.Session(config=config))

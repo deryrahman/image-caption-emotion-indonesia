@@ -1,5 +1,5 @@
 from keras.applications.resnet_v2 import ResNet152V2
-from keras.layers import Input, Dense, LSTM, Embedding, Concatenate, RepeatVector, Lambda
+from keras.layers import Input, Dense, LSTM, Embedding, Concatenate, RepeatVector, Lambda, Reshape
 from keras.models import Model
 from keras.optimizers import Adam
 from keras.utils.np_utils import np
@@ -165,15 +165,18 @@ class StyleNet():
             shape=(self.transfer_values_size,), name='transfer_values_input')
         if self.injection_mode == 'init':
             decoder_units = self.state_size
+            activation = 'tanh'
         elif self.injection_mode == 'pre':
             decoder_units = self.embedding_size
+            activation = 'linear'
         decoder_transfer_map = Dense(
             decoder_units,
-            activation='tanh',
+            activation=activation,
             name='decoder_transfer_map',
             trainable=self.mode == 'factual')
-        decoder_transfer_map_transform = RepeatVector(1)
-        concatenate = Concatenate(axis=1)
+        decoder_transfer_map_transform = Reshape(
+            (1, decoder_units), name='decoder_transfer_map_transform')
+        concatenate = Concatenate(axis=1, name='decoder_concatenate')
 
         # word embedding
         decoder_input = Input(shape=(None,), name='decoder_input')
@@ -197,7 +200,7 @@ class StyleNet():
             activation='linear',
             name='decoder_output',
             trainable=self.mode == 'factual')
-        decoder_step = Lambda(lambda x: x[:, 1:, :])
+        decoder_step = Lambda(lambda x: x[:, 1:, :], name='decoder_step')
 
         # connect decoder
         net = decoder_input

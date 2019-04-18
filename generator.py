@@ -28,11 +28,14 @@ def batch_generator(batch_size,
                 partial_transfer_values.append(transfer_values[filename])
             partial_transfer_values = np.array(partial_transfer_values)
 
-        tokens = get_random_caption_tokens(ids, tokens)
+        partial_tokens = get_random_caption_tokens(ids, tokens)
 
-        max_tokens = np.max([len(t) for t in tokens])
+        max_tokens = np.max([len(t) for t in partial_tokens])
         tokens_padded = pad_sequences(
-            tokens, maxlen=max_tokens, padding='post', truncating='post')
+            partial_tokens,
+            maxlen=max_tokens,
+            padding='post',
+            truncating='post')
 
         decoder_input_data = tokens_padded[:, 0:-1]
         decoder_output_data = tokens_padded[:, 1:]

@@ -7,6 +7,8 @@ from generator import batch_generator
 from model import StyleNet
 from callbacks import ModelCheckpoint
 from keras.callbacks import TensorBoard, EarlyStopping
+from evaluator import bleu_evaluator
+from predictor import generate_caption
 import tensorflow as tf
 import numpy as np
 import argparse
@@ -181,6 +183,20 @@ def main(args):
     scores = stylenet.model.evaluate_generator(
         generator=generator_test, steps=test_steps, verbose=1)
     print('test loss', scores)
+
+    references = []
+    predictions = []
+    for filename, refs in zip(filenames_test, captions_test):
+        _, _, output_text = generate_caption(
+            image_path=dataset_path + '/img/' + filename,
+            image_model_transfer=encoder_resnet152.model,
+            decoder_model=stylenet.model,
+            tokenizer=tokenizer,
+            img_size=img_size)
+        print(output_text)
+        predictions.append(output_text)
+        references.append(refs)
+    print(bleu_evaluator(references, predictions))
 
 
 if __name__ == '__main__':

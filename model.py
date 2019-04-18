@@ -1,5 +1,5 @@
 from keras.applications.resnet_v2 import ResNet152V2
-from keras.layers import Input, Dense, LSTM, Embedding, Concatenate, Reshape
+from keras.layers import Input, Dense, LSTM, Embedding, Concatenate, RepeatVector, Lambda
 from keras.models import Model
 from keras.optimizers import Adam
 from keras.utils.np_utils import np
@@ -39,23 +39,19 @@ class NIC():
 
     def _build(self):
         # image embedding
-        if self.include_transfer_value:
-            transfer_values_input = Input(
-                shape=(self.transfer_values_size,),
-                name='transfer_values_input')
-            if self.injection_mode == 'init':
-                decoder_transfer_map = Dense(
-                    self.state_size,
-                    activation='tanh',
-                    name='decoder_transfer_map')
-            elif self.injection_mode == 'pre':
-                decoder_transfer_map = Dense(
-                    self.embedding_size,
-                    activation='tanh',
-                    name='decoder_transfer_map')
-                decoder_transfer_map_reshape = Reshape(
-                    target_shape=(1, self.embedding_size))
-                concatenate = Concatenate(axis=1)
+        transfer_values_input = Input(
+            shape=(self.transfer_values_size,), name='transfer_values_input')
+        if self.injection_mode == 'init':
+            decoder_units = self.state_size
+        elif self.injection_mode == 'pre':
+            decoder_units = self.embedding_size
+        decoder_transfer_map = Dense(
+            decoder_units,
+            activation='tanh',
+            name='decoder_transfer_map',
+            trainable=self.mode == 'factual')
+        decoder_transfer_map_transform = RepeatVector(1)
+        concatenate = Concatenate(axis=1)
 
         # word embedding
         decoder_input = Input(shape=(None,), name='decoder_input')
@@ -74,6 +70,7 @@ class NIC():
                     return_sequences=True))
         decoder_dense = Dense(
             self.num_words, activation='linear', name='decoder_output')
+        decoder_step = Lambda(lambda x: x[:, 1:, :])
 
         # connect decoder
         net = decoder_input
@@ -85,21 +82,21 @@ class NIC():
                     net = decoder_lstm[i](
                         net, initial_state=(initial_state, initial_state))
             elif self.injection_mode == 'pre':
-                initial_state = decoder_transfer_map_reshape(initial_state)
+                initial_state = decoder_transfer_map_transform(initial_state)
                 net = concatenate([initial_state, net])
                 for i in range(self.lstm_layers):
                     net = decoder_lstm[i](net)
+                net = decoder_step(net)
         else:
             for i in range(self.lstm_layers):
                 net = decoder_lstm[i](net)
         decoder_output = decoder_dense(net)
 
         # create model
-        if self.include_transfer_value:
-            inputs = [transfer_values_input, decoder_input]
-        else:
-            inputs = [decoder_input]
-        self.model = Model(inputs=inputs, outputs=[decoder_output])
+        self.model = Model(
+            inputs=[transfer_values_input, decoder_input]
+            if self.include_transfer_value else [decoder_input],
+            outputs=[decoder_output])
 
         # Adam optimizer
         optimizer = Adam(
@@ -166,25 +163,19 @@ class StyleNet():
 
     def _build(self):
         # image embedding
-        if self.include_transfer_value:
-            transfer_values_input = Input(
-                shape=(self.transfer_values_size,),
-                name='transfer_values_input')
-            if self.injection_mode == 'init':
-                decoder_transfer_map = Dense(
-                    self.state_size,
-                    activation='tanh',
-                    name='decoder_transfer_map',
-                    trainable=self.mode == 'factual')
-            elif self.injection_mode == 'pre':
-                decoder_transfer_map = Dense(
-                    self.embedding_size,
-                    activation='tanh',
-                    name='decoder_transfer_map',
-                    trainable=self.mode == 'factual')
-                decoder_transfer_map_reshape = Reshape(
-                    target_shape=(1, self.embedding_size))
-                concatenate = Concatenate(axis=1)
+        transfer_values_input = Input(
+            shape=(self.transfer_values_size,), name='transfer_values_input')
+        if self.injection_mode == 'init':
+            decoder_units = self.state_size
+        elif self.injection_mode == 'pre':
+            decoder_units = self.embedding_size
+        decoder_transfer_map = Dense(
+            decoder_units,
+            activation='tanh',
+            name='decoder_transfer_map',
+            trainable=self.mode == 'factual')
+        decoder_transfer_map_transform = RepeatVector(1)
+        concatenate = Concatenate(axis=1)
 
         # word embedding
         decoder_input = Input(shape=(None,), name='decoder_input')
@@ -208,6 +199,7 @@ class StyleNet():
             activation='linear',
             name='decoder_output',
             trainable=self.mode == 'factual')
+        decoder_step = Lambda(lambda x: x[:, 1:, :])
 
         # connect decoder
         net = decoder_input
@@ -219,21 +211,21 @@ class StyleNet():
                     net = decoder_factored_lstm[i](
                         net, initial_state=(initial_state, initial_state))
             elif self.injection_mode == 'pre':
-                initial_state = decoder_transfer_map_reshape(initial_state)
+                initial_state = decoder_transfer_map_transform(initial_state)
                 net = concatenate([initial_state, net])
                 for i in range(self.lstm_layers):
                     net = decoder_factored_lstm[i](net)
+                net = decoder_step(net)
         else:
             for i in range(self.lstm_layers):
                 net = decoder_factored_lstm[i](net)
         decoder_output = decoder_dense(net)
 
         # create model
-        if self.include_transfer_value:
-            inputs = [transfer_values_input, decoder_input]
-        else:
-            inputs = [decoder_input]
-        self.model = Model(inputs=inputs, outputs=[decoder_output])
+        self.model = Model(
+            inputs=[transfer_values_input, decoder_input]
+            if self.include_transfer_value else [decoder_input],
+            outputs=[decoder_output])
 
         # Adam optimizer
         optimizer = Adam(

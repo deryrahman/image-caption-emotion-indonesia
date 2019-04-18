@@ -16,6 +16,7 @@ import argparse
 
 def main(args):
     epoch_num = args.epoch_num
+    injection_mode = args.injection_mode
     checkpoints_path = args.checkpoints_path
     dataset_path = args.dataset_path
     dataset = args.dataset
@@ -35,7 +36,7 @@ def main(args):
     batch_size = args.batch_size
 
     config = tf.ConfigProto()
-    # config.gpu_options.allow_growth = True
+    config.gpu_options.allow_growth = True
     config.gpu_options.per_process_gpu_memory_fraction = gpu_frac
     K.tensorflow_backend.set_session(tf.Session(config=config))
 
@@ -98,36 +99,39 @@ def main(args):
 
     captions_train_marked = mark_captions(captions_train)
     tokens_train = tokenizer.captions_to_tokens(captions_train_marked)
+    transfer_values_train = np.array(
+        [transfer_values[filename] for filename in filenames_train])
 
     captions_val_marked = mark_captions(captions_val)
     tokens_val = tokenizer.captions_to_tokens(captions_val_marked)
+    transfer_values_val = np.array(
+        [transfer_values[filename] for filename in filenames_val])
 
     captions_test_marked = mark_captions(captions_test)
     tokens_test = tokenizer.captions_to_tokens(captions_test_marked)
+    transfer_values_test = np.array(
+        [transfer_values[filename] for filename in filenames_test])
 
     generator_train = batch_generator(
         batch_size=batch_size,
-        filenames=filenames_train,
-        transfer_values=transfer_values,
+        transfer_values=transfer_values_train,
         tokens=tokens_train,
         with_transfer_values=mode == 'factual')
 
     generator_val = batch_generator(
         batch_size=batch_size,
-        filenames=filenames_val,
-        transfer_values=transfer_values,
+        transfer_values=transfer_values_val,
         tokens=tokens_val,
         with_transfer_values=mode == 'factual')
 
     generator_test = batch_generator(
         batch_size=batch_size,
-        filenames=filenames_test,
-        transfer_values=transfer_values,
+        transfer_values=transfer_values_test,
         tokens=tokens_test,
         with_transfer_values=mode == 'factual')
 
     stylenet = StyleNet(
-        injection_mode='pre',
+        injection_mode=injection_mode,
         num_words=num_words,
         include_transfer_value=mode == 'factual',
         mode=mode,
@@ -233,6 +237,11 @@ if __name__ == '__main__':
         type=str,
         default='factual',
         help='emotion mode; factual, happy, sad, angry')
+    parser.add_argument(
+        '--injection_mode',
+        type=str,
+        default='init',
+        help='transfer value injection mode')
     parser.add_argument(
         '--gpu_frac',
         type=float,

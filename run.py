@@ -151,7 +151,11 @@ def main(args):
     path_checkpoint = checkpoints_path + '/{}.checkpoint.id.layer{}.factored{}.state{}.embedding{}.keras'.format(
         dataset, lstm_layers, factored_size, state_size, embedding_size)
     callback_checkpoint = ModelCheckpoint(
-        stylenet, filepath=path_checkpoint, monitor='val_loss', verbose=1)
+        stylenet,
+        filepath=path_checkpoint,
+        monitor='val_loss',
+        verbose=1,
+        save_best_only=True)
     callback_earystoping = EarlyStopping(
         monitor='val_loss', verbose=1, patience=10)
     log_dir = (

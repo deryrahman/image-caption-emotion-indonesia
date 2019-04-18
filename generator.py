@@ -13,20 +13,12 @@ def get_random_caption_tokens(ids, tokens):
 
 
 def batch_generator(batch_size,
-                    filenames,
                     transfer_values,
                     tokens,
                     with_transfer_values=True):
-    filenames = np.array(filenames)
     while True:
-        ids = np.random.randint(len(filenames), size=batch_size)
-
-        if with_transfer_values:
-            partial_filenames = filenames[ids]
-            partial_transfer_values = []
-            for filename in partial_filenames:
-                partial_transfer_values.append(transfer_values[filename])
-            partial_transfer_values = np.array(partial_transfer_values)
+        ids = np.random.randint(len(tokens), size=batch_size)
+        partial_transfer_values = transfer_values[ids]
 
         partial_tokens = get_random_caption_tokens(ids, tokens)
 

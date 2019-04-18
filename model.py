@@ -7,6 +7,7 @@ from nn import FactoredLSTM
 from loss import sparse_cross_entropy
 from keras.utils import plot_model
 import tensorflow as tf
+import os
 
 
 class NIC():
@@ -46,10 +47,7 @@ class NIC():
         elif self.injection_mode == 'pre':
             decoder_units = self.embedding_size
         decoder_transfer_map = Dense(
-            decoder_units,
-            activation='tanh',
-            name='decoder_transfer_map',
-            trainable=self.mode == 'factual')
+            decoder_units, activation='tanh', name='decoder_transfer_map')
         decoder_transfer_map_transform = RepeatVector(1)
         concatenate = Concatenate(axis=1)
 
@@ -242,8 +240,9 @@ class StyleNet():
             target_tensors=[decoder_target])
         plot_model(self.model, to_file='stylenet.png', show_shapes=True)
 
-    def save(self, path):
-        self.model.save_weights(path, overwrite=True)
+    def save(self, path, overwrite):
+        if self.mode == 'factual':
+            self.model.save_weights(path, overwrite=overwrite)
         weight_values = []
         for layer in self.model.layers:
             if layer.name[:-2] == 'decoder_factored_lstm':
@@ -252,7 +251,10 @@ class StyleNet():
                     if name == 'kernel_S_{}'.format(self.mode):
                         weight_values.append([value])
                         break
-        np.save('{}.kernel_S.{}.npy'.format(path, self.mode), weight_values)
+        file_path = '{}.kernel_S.{}.npy'.format(path, self.mode)
+        if (not os.path.exists(file_path)) or overwrite:
+            print('save factored weight for emotion', self.mode)
+            np.save(file_path, weight_values)
 
     def load(self, path):
         initial_weight_kernel_S = self._get_weight_values(

@@ -132,7 +132,7 @@ def main(args):
 
     stylenet = StyleNet(
         injection_mode=injection_mode,
-        num_words=num_words,
+        num_words=num_words + 1,
         include_transfer_value=mode == 'factual',
         mode=mode,
         state_size=state_size,

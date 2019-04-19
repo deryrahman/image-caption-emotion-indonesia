@@ -260,17 +260,18 @@ class StyleNet():
             np.save(file_path, weight_values)
 
     def load(self, path):
-        initial_weight_kernel_S = self._get_weight_values(
-            layer_name='decoder_factored_lstm',
-            weight_name='kernel_S_{}'.format(self.mode))
+        # initial_weight_kernel_S = self._get_weight_values(
+        #     layer_name='decoder_factored_lstm',
+        #     weight_name='kernel_S_{}'.format(self.mode))
         self.model.load_weights(path, by_name=True, skip_mismatch=True)
         try:
             kernel_S_value = np.load('{}.kernel_S.{}.npy'.format(
                 path, self.mode))
         except IOError as e:
             print(e)
-            print('But it\'s ok, it will be skipped')
-            kernel_S_value = initial_weight_kernel_S
+            print('But it\'s ok, it will be skipped, used factual')
+            kernel_S_value = np.load('{}.kernel_S.{}.npy'.format(
+                path, 'factual'))
         self._set_weight_values(
             layer_name='decoder_factored_lstm',
             weight_values=kernel_S_value,

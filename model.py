@@ -1,5 +1,5 @@
 from keras.applications.resnet_v2 import ResNet152V2
-from keras.layers import Input, Dense, LSTM, Embedding, Concatenate, RepeatVector, Lambda, Reshape
+from keras.layers import Input, Dense, LSTM, Embedding, Concatenate, RepeatVector, Lambda, Reshape, Bidirectional
 from keras.models import Model
 from keras.optimizers import Adam
 from keras.utils.np_utils import np
@@ -47,7 +47,7 @@ class NIC():
         elif self.injection_mode == 'pre':
             decoder_units = self.embedding_size
         decoder_transfer_map = Dense(
-            decoder_units, activation='tanh', name='decoder_transfer_map')
+            decoder_units, activation='linear', name='decoder_transfer_map')
         decoder_transfer_map_transform = RepeatVector(1)
         concatenate = Concatenate(axis=1)
 
@@ -62,10 +62,11 @@ class NIC():
         decoder_lstm = []
         for i in range(self.lstm_layers):
             decoder_lstm.append(
-                LSTM(
-                    self.state_size,
-                    name='decoder_lstm_{}'.format(i),
-                    return_sequences=True))
+                Bidirectional(
+                    LSTM(
+                        self.state_size,
+                        name='decoder_lstm_{}'.format(i),
+                        return_sequences=True)))
         decoder_dense = Dense(
             self.num_words, activation='linear', name='decoder_output')
         decoder_step = Lambda(lambda x: x[:, 1:, :])
@@ -165,13 +166,11 @@ class StyleNet():
             shape=(self.transfer_values_size,), name='transfer_values_input')
         if self.injection_mode == 'init':
             decoder_units = self.state_size
-            activation = 'tanh'
         elif self.injection_mode == 'pre':
             decoder_units = self.embedding_size
-            activation = 'linear'
         decoder_transfer_map = Dense(
             decoder_units,
-            activation=activation,
+            activation='linear',
             name='decoder_transfer_map',
             trainable=self.mode == 'factual')
         decoder_transfer_map_transform = Reshape(
@@ -190,11 +189,12 @@ class StyleNet():
         decoder_factored_lstm = []
         for i in range(self.lstm_layers):
             decoder_factored_lstm.append(
-                FactoredLSTM(
-                    self.state_size,
-                    mode=self.mode,
-                    name='decoder_factored_lstm_{}'.format(i),
-                    return_sequences=True))
+                Bidirectional(
+                    FactoredLSTM(
+                        self.state_size,
+                        mode=self.mode,
+                        name='decoder_factored_lstm_{}'.format(i),
+                        return_sequences=True)))
         decoder_dense = Dense(
             self.num_words,
             activation='linear',
@@ -260,18 +260,17 @@ class StyleNet():
             np.save(file_path, weight_values)
 
     def load(self, path):
-        # initial_weight_kernel_S = self._get_weight_values(
-        #     layer_name='decoder_factored_lstm',
-        #     weight_name='kernel_S_{}'.format(self.mode))
+        initial_weight_kernel_S = self._get_weight_values(
+            layer_name='decoder_factored_lstm',
+            weight_name='kernel_S_{}'.format(self.mode))
         self.model.load_weights(path, by_name=True, skip_mismatch=True)
         try:
             kernel_S_value = np.load('{}.kernel_S.{}.npy'.format(
                 path, self.mode))
         except IOError as e:
             print(e)
-            print('But it\'s ok, it will be skipped, used factual')
-            kernel_S_value = np.load('{}.kernel_S.{}.npy'.format(
-                path, 'factual'))
+            print('But it\'s ok, it will be skipped')
+            kernel_S_value = initial_weight_kernel_S
         self._set_weight_values(
             layer_name='decoder_factored_lstm',
             weight_values=kernel_S_value,

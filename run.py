@@ -25,6 +25,7 @@ def main(args):
     mode = args.mode
     load_model = args.load_model
     gpu_frac = args.gpu_frac
+    with_transfer_value = args.with_transfer_value
 
     state_size = args.state_size
     embedding_size = args.embedding_size
@@ -103,41 +104,46 @@ def main(args):
 
     captions_train_marked = mark_captions(captions_train)
     tokens_train = tokenizer.captions_to_tokens(captions_train_marked)
-    transfer_values_train = np.array(
-        [transfer_values[filename] for filename in filenames_train])
 
     captions_val_marked = mark_captions(captions_val)
     tokens_val = tokenizer.captions_to_tokens(captions_val_marked)
-    transfer_values_val = np.array(
-        [transfer_values[filename] for filename in filenames_val])
 
     captions_test_marked = mark_captions(captions_test)
     tokens_test = tokenizer.captions_to_tokens(captions_test_marked)
-    transfer_values_test = np.array(
-        [transfer_values[filename] for filename in filenames_test])
+
+    if with_transfer_value == 1:
+        transfer_values_train = np.array(
+            [transfer_values[filename] for filename in filenames_train])
+        transfer_values_val = np.array(
+            [transfer_values[filename] for filename in filenames_val])
+        transfer_values_test = np.array(
+            [transfer_values[filename] for filename in filenames_test])
 
     generator_train = batch_generator(
         batch_size=batch_size,
-        transfer_values=transfer_values_train,
+        transfer_values=transfer_values_train
+        if with_transfer_value == 1 else None,
         tokens=tokens_train,
-        with_transfer_values=mode == 'factual')
+        with_transfer_values=with_transfer_value == 1)
 
     generator_val = batch_generator(
         batch_size=batch_size,
-        transfer_values=transfer_values_val,
+        transfer_values=transfer_values_val
+        if with_transfer_value == 1 else None,
         tokens=tokens_val,
-        with_transfer_values=mode == 'factual')
+        with_transfer_values=with_transfer_value == 1)
 
     generator_test = batch_generator(
         batch_size=batch_size,
-        transfer_values=transfer_values_test,
+        transfer_values=transfer_values_test
+        if with_transfer_value == 1 else None,
         tokens=tokens_test,
-        with_transfer_values=mode == 'factual')
+        with_transfer_values=with_transfer_value == 1)
 
     stylenet = StyleNet(
         injection_mode=injection_mode,
         num_words=num_words + 1,
-        include_transfer_value=mode == 'factual',
+        include_transfer_value=with_transfer_value == 1,
         mode=mode,
         state_size=state_size,
         embedding_size=embedding_size,
@@ -272,6 +278,11 @@ if __name__ == '__main__':
         type=str,
         default='init',
         help='transfer value injection mode')
+    parser.add_argument(
+        '--with_transfer_value',
+        type=int,
+        default=1,
+        help='use transfer value or not')
     parser.add_argument(
         '--gpu_frac',
         type=float,

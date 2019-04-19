@@ -148,8 +148,10 @@ def main(args):
         beta_2=beta_2,
         epsilon=epsilon)
 
-    path_checkpoint = checkpoints_path + '/{}.checkpoint.id.layer{}.factored{}.state{}.embedding{}.keras'.format(
-        dataset, lstm_layers, factored_size, state_size, embedding_size)
+    path_checkpoint = checkpoints_path + (
+        '/{}.checkpoint.id.injection{}.layer{}.factored{}.state{}.embedding{}.keras'
+    ).format(dataset, injection_mode, lstm_layers, factored_size, state_size,
+             embedding_size)
     callback_checkpoint = ModelCheckpoint(
         stylenet,
         filepath=path_checkpoint,
@@ -159,10 +161,11 @@ def main(args):
     callback_earystoping = EarlyStopping(
         monitor='val_loss', verbose=1, patience=10)
     log_dir = (
-        logs_path + '/{mode}/'
+        logs_path + '/{mode}/{injection}/'
         '{dataset}_epoch_{start_from}_{to}_layer{layer_size}_factored{factored_size}_'
         'state{state_size}_embedding{embedding_size}').format(
             mode=mode,
+            injection=injection_mode,
             dataset=dataset,
             start_from=0,
             to=epoch_num,
@@ -195,6 +198,25 @@ def main(args):
     scores = stylenet.model.evaluate_generator(
         generator=generator_test, steps=test_steps, verbose=1)
     print('test loss', scores)
+
+    stylenet = StyleNet(
+        injection_mode=injection_mode,
+        num_words=num_words + 1,
+        include_transfer_value=True,
+        mode=mode,
+        state_size=state_size,
+        embedding_size=embedding_size,
+        factored_size=factored_size,
+        lstm_layers=lstm_layers,
+        learning_rate=learning_rate,
+        beta_1=beta_1,
+        beta_2=beta_2,
+        epsilon=epsilon)
+    try:
+        stylenet.load(path_checkpoint)
+    except Exception as error:
+        print("Error trying to load checkpoint.")
+        print(error)
 
     references = []
     predictions = []

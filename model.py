@@ -1,5 +1,5 @@
 from keras.applications.resnet_v2 import ResNet152V2
-from keras.layers import Input, Dense, LSTM, Embedding, Concatenate, RepeatVector, Lambda, Reshape, Bidirectional
+from keras.layers import Input, Dense, LSTM, Embedding, Concatenate, RepeatVector, Lambda
 from keras.models import Model
 from keras.optimizers import Adam
 from keras.utils.np_utils import np
@@ -48,8 +48,9 @@ class NIC():
             decoder_units = self.embedding_size
         decoder_transfer_map = Dense(
             decoder_units, activation='linear', name='decoder_transfer_map')
-        decoder_transfer_map_transform = RepeatVector(1)
-        concatenate = Concatenate(axis=1)
+        decoder_transfer_map_transform = RepeatVector(
+            1, name='decoder_transfer_map_transform')
+        concatenate = Concatenate(axis=1, name='decoder_concatenate')
 
         # word embedding
         decoder_input = Input(shape=(None,), name='decoder_input')
@@ -62,14 +63,13 @@ class NIC():
         decoder_lstm = []
         for i in range(self.lstm_layers):
             decoder_lstm.append(
-                Bidirectional(
-                    LSTM(
-                        self.state_size,
-                        name='decoder_lstm_{}'.format(i),
-                        return_sequences=True)))
+                LSTM(
+                    self.state_size,
+                    name='decoder_lstm_{}'.format(i),
+                    return_sequences=True))
         decoder_dense = Dense(
             self.num_words, activation='linear', name='decoder_output')
-        decoder_step = Lambda(lambda x: x[:, 1:, :])
+        decoder_step = Lambda(lambda x: x[:, 1:, :], name='decoder_step')
 
         # connect decoder
         net = decoder_input
@@ -173,8 +173,8 @@ class StyleNet():
             activation='linear',
             name='decoder_transfer_map',
             trainable=self.mode == 'factual')
-        decoder_transfer_map_transform = Reshape(
-            (1, decoder_units), name='decoder_transfer_map_transform')
+        decoder_transfer_map_transform = RepeatVector(
+            1, name='decoder_transfer_map_transform')
         concatenate = Concatenate(axis=1, name='decoder_concatenate')
 
         # word embedding
@@ -189,12 +189,11 @@ class StyleNet():
         decoder_factored_lstm = []
         for i in range(self.lstm_layers):
             decoder_factored_lstm.append(
-                Bidirectional(
-                    FactoredLSTM(
-                        self.state_size,
-                        mode=self.mode,
-                        name='decoder_factored_lstm_{}'.format(i),
-                        return_sequences=True)))
+                FactoredLSTM(
+                    self.state_size,
+                    mode=self.mode,
+                    name='decoder_factored_lstm_{}'.format(i),
+                    return_sequences=True))
         decoder_dense = Dense(
             self.num_words,
             activation='linear',

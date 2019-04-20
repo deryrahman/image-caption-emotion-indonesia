@@ -1,15 +1,14 @@
-from preparation import load_caption
-from model import EncoderResNet152
-from keras import backend as K
-from images import process_images_all
-from tokenizer import mark_captions, flatten, TokenizerWrap
-from generator import batch_generator
-from model import StyleNet
+from preprocess.dataset import load_caption
+from model import EncoderResNet152, StyleNet
+from preprocess.images import process_images_all
+from preprocess.tokenizer import mark_captions, flatten, TokenizerWrap
+from utils.generator import batch_generator
+from utils.evaluator import bleu_evaluator
+from utils.predictor import generate_caption
 from callbacks import ModelCheckpoint
 from keras.callbacks import TensorBoard, EarlyStopping
-from evaluator import bleu_evaluator
-from predictor import generate_caption
 from tensorflow.core.protobuf import rewriter_config_pb2
+from keras import backend as K
 import tensorflow as tf
 import numpy as np
 import argparse
@@ -85,10 +84,10 @@ def main(args):
     filenames_val, captions_val = val
     filenames_test, captions_test = test
 
-    # for local testing only
-    filenames_train, captions_train = filenames_train[:50], captions_train[:50]
-    filenames_val, captions_val = filenames_val[:5], captions_val[:5]
-    filenames_test, captions_test = filenames_test[:5], captions_test[:5]
+    # # for local testing only
+    # filenames_train, captions_train = filenames_train[:50], captions_train[:50]
+    # filenames_val, captions_val = filenames_val[:5], captions_val[:5]
+    # filenames_test, captions_test = filenames_test[:5], captions_test[:5]
 
     num_captions_train = [len(captions) for captions in captions_train]
     total_num_captions_train = np.sum(num_captions_train)
@@ -212,7 +211,7 @@ def main(args):
 
     stylenet = StyleNet(
         injection_mode=injection_mode,
-        num_words=num_words + 1,
+        num_words=num_words,
         include_transfer_value=True,
         mode=mode,
         trainable_factor=mode == 'factual',

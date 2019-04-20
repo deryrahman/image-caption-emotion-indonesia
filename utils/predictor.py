@@ -1,6 +1,6 @@
-from images import load_image
-from tokenizer import mark_end, mark_start
-import numpy as np
+from preprocess.images import load_image
+from preprocess.tokenizer import mark_end, mark_start
+from keras.utils.np_utils import np
 
 
 def generate_caption(image_path,

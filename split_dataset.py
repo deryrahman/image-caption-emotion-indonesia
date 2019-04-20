@@ -1,5 +1,5 @@
-from preparation import split_dataset, save_dataset
-from tokenizer import mark_captions, flatten, TokenizerWrap
+from preprocess.dataset import split_dataset, save_dataset
+from preprocess.tokenizer import mark_captions, flatten, TokenizerWrap
 import json
 import argparse
 

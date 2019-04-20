@@ -1,15 +1,14 @@
-from preparation import load_caption
-from model import EncoderResNet152
-from keras import backend as K
-from images import process_images_all
-from tokenizer import mark_captions, flatten, TokenizerWrap
-from generator import batch_generator
-from model import NIC
+from preprocess.dataset import load_caption
+from model import EncoderResNet152, NIC
+from preprocess.images import process_images_all
+from preprocess.tokenizer import mark_captions, flatten, TokenizerWrap
+from utils.generator import batch_generator
+from utils.evaluator import bleu_evaluator
+from utils.predictor import generate_caption
 from callbacks import ModelCheckpoint
 from keras.callbacks import TensorBoard, EarlyStopping
-from evaluator import bleu_evaluator
-from predictor import generate_caption
 from tensorflow.core.protobuf import rewriter_config_pb2
+from keras import backend as K
 import tensorflow as tf
 import numpy as np
 import argparse

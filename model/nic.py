@@ -43,7 +43,7 @@ class NIC():
         elif self.injection_mode == 'pre':
             decoder_units = self.embedding_size
         decoder_transfer_map = Dense(
-            decoder_units, activation='linear', name='decoder_transfer_map')
+            decoder_units, activation='tanh', name='decoder_transfer_map')
         decoder_transfer_map_transform = RepeatVector(
             1, name='decoder_transfer_map_transform')
         concatenate = Concatenate(axis=1, name='decoder_concatenate')
@@ -64,7 +64,7 @@ class NIC():
                     name='decoder_lstm_{}'.format(i),
                     return_sequences=True))
         decoder_dense = Dense(
-            self.num_words, activation='softmax', name='decoder_output')
+            self.num_words, activation='linear', name='decoder_output')
         decoder_step = Lambda(lambda x: x[:, 1:, :], name='decoder_step')
 
         # connect decoder

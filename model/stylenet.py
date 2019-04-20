@@ -53,7 +53,7 @@ class StyleNet():
             decoder_units = self.embedding_size
         decoder_transfer_map = Dense(
             decoder_units,
-            activation='linear',
+            activation='tanh',
             name='decoder_transfer_map',
             trainable=self.trainable_factor)
         decoder_transfer_map_transform = RepeatVector(
@@ -81,7 +81,7 @@ class StyleNet():
                     return_sequences=True))
         decoder_dense = Dense(
             self.num_words,
-            activation='softmax',
+            activation='linear',
             name='decoder_output',
             trainable=self.trainable_factor)
         decoder_step = Lambda(lambda x: x[:, 1:, :], name='decoder_step')

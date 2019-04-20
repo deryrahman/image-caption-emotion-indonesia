@@ -81,6 +81,8 @@ def process_images_all(folder_path,
         with open(cache_path, 'rb') as f:
             transfer_values = pickle.load(f)
     else:
+        if not os.path.exists(path):
+            os.mkdir(path)
         values = process_images(folder_path, filenames, img_size,
                                 transfer_values_size, image_model_transfer,
                                 batch_size)

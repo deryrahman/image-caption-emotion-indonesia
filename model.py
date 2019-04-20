@@ -68,7 +68,7 @@ class NIC():
                     name='decoder_lstm_{}'.format(i),
                     return_sequences=True))
         decoder_dense = Dense(
-            self.num_words, activation='linear', name='decoder_output')
+            self.num_words, activation='softmax', name='decoder_output')
         decoder_step = Lambda(lambda x: x[:, 1:, :], name='decoder_step')
 
         # connect decoder
@@ -133,6 +133,7 @@ class StyleNet():
     def __init__(self,
                  mode='factual',
                  include_transfer_value=True,
+                 trainable_factor=True,
                  injection_mode='init',
                  num_words=10000,
                  transfer_values_size=2048,
@@ -172,7 +173,7 @@ class StyleNet():
             decoder_units,
             activation='linear',
             name='decoder_transfer_map',
-            trainable=self.mode == 'factual')
+            trainable=self.trainable_factor)
         decoder_transfer_map_transform = RepeatVector(
             1, name='decoder_transfer_map_transform')
         concatenate = Concatenate(axis=1, name='decoder_concatenate')
@@ -183,7 +184,7 @@ class StyleNet():
             input_dim=self.num_words,
             output_dim=self.embedding_size,
             name='decoder_embedding',
-            trainable=self.mode == 'factual')
+            trainable=self.trainable_factor)
 
         # decoder LSTM
         decoder_factored_lstm = []
@@ -196,9 +197,9 @@ class StyleNet():
                     return_sequences=True))
         decoder_dense = Dense(
             self.num_words,
-            activation='linear',
+            activation='softmax',
             name='decoder_output',
-            trainable=self.mode == 'factual')
+            trainable=self.trainable_factor)
         decoder_step = Lambda(lambda x: x[:, 1:, :], name='decoder_step')
 
         # connect decoder
@@ -243,7 +244,7 @@ class StyleNet():
         # plot_model(self.model, to_file='stylenet.png', show_shapes=True)
 
     def save(self, path, overwrite):
-        if self.mode == 'factual':
+        if self.trainable_factor:
             self.model.save_weights(path, overwrite=overwrite)
         weight_values = []
         for layer in self.model.layers:

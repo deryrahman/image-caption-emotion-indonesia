@@ -146,6 +146,7 @@ class StyleNet():
                  epsilon=1e-08,
                  lstm_layers=1):
         self.injection_mode = injection_mode
+        self.trainable_factor = trainable_factor
         self.include_transfer_value = include_transfer_value
         self.mode = mode
         self.num_words = num_words
@@ -193,6 +194,8 @@ class StyleNet():
                 FactoredLSTM(
                     self.state_size,
                     mode=self.mode,
+                    trainable_factor=self.trainable_factor,
+                    factored_dim=self.factored_size,
                     name='decoder_factored_lstm_{}'.format(i),
                     return_sequences=True))
         decoder_dense = Dense(

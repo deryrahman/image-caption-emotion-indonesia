@@ -1,4 +1,3 @@
-from tokenizer import mark_captions, flatten, TokenizerWrap
 import json
 import os
 
@@ -352,60 +351,3 @@ def invoke_edited_to_dataset(mongo_dump_path, dataset_folder):
 
     with open(dataset_folder + '/captions.json', 'w') as f:
         json.dump(contents, f)
-
-
-if __name__ == '__main__':
-    path = './dataset'
-    mongo_dump_path = './dataset/dump/041619.json'
-    flickr_folder = './dataset/flickr10k'
-
-    # convert mongo to caption dict
-    caption_flickr, caption_coco = convert_mongo(path=path + '/caption_bc.json')
-
-    # save
-    with open(flickr_folder + '/captions.json', 'w') as f:
-        json.dump(caption_flickr, f)
-
-    # invoke new edited caption
-    invoke_edited_to_dataset(mongo_dump_path, flickr_folder)
-
-    # invoke new emotion
-    for mode in ['happy', 'sad', 'angry']:
-        invoke_emotion_to_dataset(mongo_dump_path, flickr_folder, 'flickr',
-                                  mode)
-
-    # separate filenames and captions
-    all_filenames = {'factual': [], 'happy': [], 'sad': [], 'angry': []}
-    all_captions = {'factual': [], 'happy': [], 'sad': [], 'angry': []}
-    for mode in ['happy', 'sad', 'angry']:
-        for data in caption_flickr:
-            if data['emotions'].get(mode):
-                all_filenames[mode].append(data['filename'])
-                all_captions[mode].append([data['emotions'][mode]])
-    all_filenames['factual'] = [data['filename'] for data in caption_flickr]
-    all_captions['factual'] = [[caption['id']
-                                for caption in data['captions']]
-                               for data in caption_flickr]
-
-    # create tokenizer
-    modes = ['happy', 'sad', 'angry']
-    captions_flat_all = []
-    for mode in ['factual'] + modes:
-        captions_marked = mark_captions(all_captions[mode])
-        captions_flat = flatten(captions_marked)
-        tokenizer = TokenizerWrap(texts=captions_flat)
-        # remove oov words
-        tmp = tokenizer.texts_to_sequences(captions_flat)
-        captions_flat = tokenizer.sequences_to_texts(tmp)
-        captions_flat_all.extend(captions_flat)
-    tokenizer = TokenizerWrap(texts=captions_flat_all)
-
-    # save to folder
-    modes = ['happy', 'sad', 'angry']
-    for mode in ['factual'] + modes:
-        train_indexes, val_indexes, test_indexes = split_dataset(
-            all_filenames[mode], all_captions[mode], flickr_folder + '/' + mode,
-            tokenizer, 10, 10)
-        save_dataset(all_filenames[mode], all_captions[mode],
-                     flickr_folder + '/' + mode, train_indexes, val_indexes,
-                     test_indexes)

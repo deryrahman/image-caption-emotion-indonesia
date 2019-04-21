@@ -37,6 +37,7 @@ def main(args):
     lstm_layers = args.lstm_layers
     batch_size = args.batch_size
     num_words = args.num_words
+    early_stop = args.early_stop
 
     config = tf.ConfigProto()
     off = rewriter_config_pb2.RewriterConfig.OFF
@@ -168,8 +169,6 @@ def main(args):
         monitor='val_loss',
         verbose=1,
         save_best_only=True)
-    callback_earystoping = EarlyStopping(
-        monitor='val_loss', verbose=1, patience=10)
     log_dir = (
         logs_path + '/stylenet/{mode}/{injection}/'
         '{dataset}_epoch_{start_from}_{to}_layer{layer_size}_factored{factored_size}_'
@@ -186,9 +185,13 @@ def main(args):
     callback_tensorboard = TensorBoard(
         log_dir=log_dir, histogram_freq=0, write_graph=False)
 
-    callbacks = [
-        callback_checkpoint, callback_earystoping, callback_tensorboard
-    ]
+    callbacks = [callback_checkpoint, callback_tensorboard]
+    if early_stop > 0:
+        callback_earystoping = EarlyStopping(
+            monitor='val_loss', verbose=1, patience=early_stop)
+        callbacks = [
+            callback_checkpoint, callback_earystoping, callback_tensorboard
+        ]
 
     if load_model == 1:
         try:
@@ -308,6 +311,11 @@ if __name__ == '__main__':
         type=int,
         default=64,
         help='number of batch size used for training')
+    parser.add_argument(
+        '--early_stop',
+        type=int,
+        default=10,
+        help='early stop if validation loss didn\'t improve')
     parser.add_argument(
         '--lstm_layers',
         type=int,

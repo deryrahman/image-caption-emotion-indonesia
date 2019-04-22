@@ -9,11 +9,11 @@ class FactoredLSTMCell(LSTMCell):
                  units,
                  factored_dim,
                  mode,
-                 trainable_factor=True,
+                 trainable_model=True,
                  **kwargs):
         self.factored_dim = factored_dim
         self.mode = mode
-        self.trainable_factor = trainable_factor
+        self.trainable_model = trainable_model
         super(FactoredLSTMCell, self).__init__(units, **kwargs)
 
     def build(self, input_shape):
@@ -46,28 +46,28 @@ class FactoredLSTMCell(LSTMCell):
             initializer=self.kernel_initializer,
             regularizer=self.kernel_regularizer,
             constraint=self.kernel_constraint,
-            trainable=self.trainable_factor)
+            trainable=self.trainable_model)
         self.kernel_U = self.add_weight(
             shape=(self.factored_dim, self.units * 4),
             name='kernel_U',
             initializer=self.kernel_initializer,
             regularizer=self.kernel_regularizer,
             constraint=self.kernel_constraint,
-            trainable=self.trainable_factor)
+            trainable=self.trainable_model)
         self.recurrent_kernel = self.add_weight(
             shape=(self.units, self.units * 4),
             name='recurrent_kernel',
             initializer=self.recurrent_initializer,
             regularizer=self.recurrent_regularizer,
             constraint=self.recurrent_constraint,
-            trainable=self.trainable_factor)
+            trainable=self.trainable_model)
         self.bias = self.add_weight(
             shape=(self.units * 4,),
             name='bias',
             initializer=bias_initializer,
             regularizer=self.bias_regularizer,
             constraint=self.bias_constraint,
-            trainable=self.trainable_factor)
+            trainable=self.trainable_model)
         self.built = True
 
     def call(self, inputs, states, training=None):
@@ -129,7 +129,7 @@ class FactoredLSTM(LSTM):
     def __init__(self,
                  units,
                  mode='factual',
-                 trainable_factor=True,
+                 trainable_model=True,
                  factored_dim=256,
                  activation='tanh',
                  recurrent_activation='hard_sigmoid',
@@ -158,7 +158,7 @@ class FactoredLSTM(LSTM):
             units,
             factored_dim=factored_dim,
             mode=mode,
-            trainable_factor=trainable_factor,
+            trainable_model=trainable_model,
             activation=activation,
             recurrent_activation=recurrent_activation,
             use_bias=use_bias,

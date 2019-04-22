@@ -50,8 +50,6 @@ class StyleNet():
     def _build(self):
         # encoder ResNet
         image_model = ResNet152V2(include_top=True, weights='imagenet')
-        for layer in image_model.layers:
-            layer.trainable = False
         transfer_layer = image_model.get_layer('avg_pool')
 
         # image embedding
@@ -170,6 +168,32 @@ class StyleNet():
             loss=sparse_cross_entropy,
             target_tensors=[decoder_target])
         # plot_model(self.model, to_file='stylenet.png', show_shapes=True)
+
+    def predict(self, image, token_start, token_end, max_tokens=30):
+        image_batch = np.expand_dims(image, axis=0)
+        transfer_values = self.model_encoder.predict(image_batch)
+
+        shape = (1, max_tokens)
+        decoder_input_data = np.zeros(shape=shape, dtype=np.int)
+
+        token_int = token_start
+        output_tokens = [token_int]
+        count_tokens = 0
+
+        while token_int != token_end and count_tokens < max_tokens:
+            decoder_input_data[0, count_tokens] = token_int
+            x_data = [transfer_values, decoder_input_data]
+
+            decoder_output = self.model_decoder.predict(x_data)
+
+            token_onehot = decoder_output[0, count_tokens, :]
+            token_int = np.argmax(token_onehot)
+
+            output_tokens.append(token_int)
+
+            count_tokens += 1
+
+        return output_tokens
 
     def save(self, path, overwrite):
         """Rewrite save model, only save weight from decoder

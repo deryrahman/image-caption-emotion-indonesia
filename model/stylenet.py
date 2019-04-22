@@ -14,7 +14,6 @@ class StyleNet():
 
     def __init__(self,
                  mode='factual',
-                 include_transfer_value=True,
                  trainable_model=True,
                  injection_mode='init',
                  num_words=10000,
@@ -29,7 +28,6 @@ class StyleNet():
                  lstm_layers=1):
         self.injection_mode = injection_mode
         self.trainable_model = trainable_model
-        self.include_transfer_value = include_transfer_value
         self.mode = mode
         self.num_words = num_words
         self.transfer_values_size = transfer_values_size
@@ -73,7 +71,7 @@ class StyleNet():
             name='decoder_embedding',
             trainable=self.trainable_model)
 
-        # decoder LSTM
+        # decoder Factored LSTM
         decoder_factored_lstm = [
             FactoredLSTM(
                 self.state_size,

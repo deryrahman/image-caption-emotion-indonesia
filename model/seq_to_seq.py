@@ -11,7 +11,7 @@ class Seq2Seq():
 
     def __init__(self,
                  mode,
-                 trainable_model=True,
+                 trainable_model=False,
                  injection_mode='init',
                  num_words=10000,
                  transfer_values_size=2048,
@@ -39,13 +39,17 @@ class Seq2Seq():
         self.encoder_lstm_layers = encoder_lstm_layers
         self.decoder_lstm_layers = decoder_lstm_layers
         self.model = None
-        self.encoder_model = None
+        self.model_partial = None
+        self.model_encoder = None
+        self.model_encoder_partial = None
+        self.model_decoder = None
         self._build()
 
     def _build(self):
         # image embedding
         transfer_values_input = Input(
-            shape=(self.transfer_values_size,), name='transfer_values_input')
+            shape=(self.transfer_values_size,),
+            name='seq2seq_transfer_values_input')
         encoder_units = {
             'init': self.state_size,
             'pre': self.embedding_size
@@ -53,15 +57,15 @@ class Seq2Seq():
         encoder_transfer_map = Dense(
             encoder_units,
             activation='tanh',
-            name='encoder_transfer_map',
+            name='seq2seq_encoder_transfer_map',
             trainable=self.trainable_model)
 
         # encoder word embedding
-        encoder_input = Input(shape=(None,), name='encoder_input')
+        encoder_input = Input(shape=(None,), name='seq2seq_encoder_input')
         encoder_embedding = Embedding(
             input_dim=self.num_words,
             output_dim=self.embedding_size,
-            name='encoder_embedding',
+            name='seq2seq_encoder_embedding',
             trainable=self.trainable_model)
 
         # encoder Factored LSTM
@@ -71,31 +75,32 @@ class Seq2Seq():
                 mode=self.mode,
                 trainable_model=self.trainable_model,
                 factored_dim=self.factored_size,
-                name='encoder_factored_lstm_{}'.format(i),
+                name='seq2seq_encoder_factored_lstm_{}'.format(i),
+                return_sequences=True,
                 return_state=True) for i in range(self.encoder_lstm_layers)
         ]
 
         # decoder word embedding
-        decoder_input = Input(shape=(None,), name='decoder_input')
+        decoder_input = Input(shape=(None,), name='seq2seq_decoder_input')
         decoder_input_h = Input(
-            shape=(self.state_size,), name='decoder_input_h')
+            shape=(self.state_size,), name='seq2seq_decoder_input_h')
         decoder_input_c = Input(
-            shape=(self.state_size,), name='decoder_input_c')
+            shape=(self.state_size,), name='seq2seq_decoder_input_c')
         decoder_embedding = Embedding(
             input_dim=self.num_words,
             output_dim=self.embedding_size,
-            name='decoder_embedding')
+            name='seq2seq_decoder_embedding')
 
         # decoder LSTM
         decoder_lstm = [
             LSTM(
                 self.state_size,
-                name='decoder_lstm_{}'.format(i),
+                name='seq2seq_decoder_lstm_{}'.format(i),
                 return_sequences=True,
                 return_state=True) for i in range(self.decoder_lstm_layers)
         ]
         decoder_dense = Dense(
-            self.num_words, activation='linear', name='decoder_output')
+            self.num_words, activation='linear', name='seq2seq_decoder_output')
 
         def connect_lstm(states, uniform_state, lstm_layers, net):
 
@@ -215,6 +220,25 @@ class Seq2Seq():
 
     def load(self, path):
         print('load hold')
+
+    def set_encoder_weights(self, stylenet):
+        """set encoder weights from stylenet model decoder
+
+        Arguments:
+            stylenet {architecture} -- stylenet instance
+        """
+        assert self.injection_mode == stylenet.injection_mode
+        assert self.transfer_values_size == stylenet.transfer_values_size
+        assert self.encoder_lstm_layers == stylenet.lstm_layers
+        assert self.state_size == stylenet.state_size
+        assert self.factored_size == stylenet.factored_size
+        assert self.embedding_size == stylenet.embedding_size
+        assert self.num_words == stylenet.num_words
+
+        for i, _ in enumerate(
+                zip(stylenet.model_decoder.layers, self.model_encoder.layers)):
+            w = stylenet.model_decoder.layers[i].get_weights()
+            self.model_encoder.layers[i].set_weights(w)
 
     def predict(self, states, token_start, token_end, max_tokens=30):
         shape = (1, max_tokens)

@@ -66,12 +66,13 @@ def seq2seq_batch_generator(batch_size, transfer_values, tokens_encoder_input,
                             tokens_decoder_input):
     while True:
         ids = np.random.randint(len(tokens_encoder_input), size=batch_size)
+
         partial_transfer_values = transfer_values[ids]
-        partial_tokens_encoder_input = []
-        partial_tokens_decoder_input = []
-        for i in ids:
-            partial_tokens_encoder_input.append(tokens_encoder_input[i][0])
-            partial_tokens_decoder_input.append(tokens_decoder_input[i][0])
+        partial_tokens_encoder_input = get_random_caption_tokens(
+            ids, tokens_encoder_input)
+        partial_tokens_decoder_input = get_random_caption_tokens(
+            ids, tokens_decoder_input)
+
         max_tokens_encoder = np.max(
             [len(t) for t in partial_tokens_encoder_input])
         max_tokens_decoder = np.max(

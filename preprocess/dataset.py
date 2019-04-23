@@ -343,6 +343,9 @@ def invoke_edited_to_dataset(mongo_dump_path, dataset_folder):
 
     for i in range(len(contents)):
         for j, cap in enumerate(contents[i]['captions']):
+            # for flickr30k. only flickr10k that has caption_id
+            if cap.get('caption_id') is None:
+                continue
             caption_id = cap['caption_id']
             if mp.get(caption_id) is None:
                 contents[i]['captions'][j]['edited'] = cap['id']

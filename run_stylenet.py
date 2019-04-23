@@ -104,10 +104,10 @@ def main(args):
     if mode == 'factual':
         train, val, test = load_caption(dataset_path + '/factual')
 
-        # for local testing only
-        train = filenames_train[:50], captions_train[:50]
-        val = filenames_val[:5], captions_val[:5]
-        test = filenames_test[:5], captions_test[:5]
+        # # for local testing only
+        # train = filenames_train[:50], captions_train[:50]
+        # val = filenames_val[:5], captions_val[:5]
+        # test = filenames_test[:5], captions_test[:5]
 
         filenames_train, captions_train = train
         filenames_val, captions_val = val
@@ -235,14 +235,14 @@ def main(args):
 
         train, val, test = load_caption(dataset_path + '/' + mode)
 
-        # for local testing only
-        train = filenames_train[:50], captions_train[:50]
-        val = filenames_val[:5], captions_val[:5]
-        test = filenames_test[:5], captions_test[:5]
+        # # for local testing only
+        # train = filenames_train[:50], captions_train[:50]
+        # val = filenames_val[:5], captions_val[:5]
+        # test = filenames_test[:5], captions_test[:5]
 
-        filenames_train, captions_train = train
-        filenames_val, captions_val = val
-        filenames_test, captions_test = test
+        # filenames_train, captions_train = train
+        # filenames_val, captions_val = val
+        # filenames_test, captions_test = test
 
         mp = {}
         for filename, caption in zip(filenames_factual, captions_factual):

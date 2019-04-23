@@ -4,10 +4,12 @@ from keras.optimizers import Adam
 from keras.utils.np_utils import np
 from loss import sparse_cross_entropy
 from nn import FactoredLSTM
+from model.base import RichModel
 import tensorflow as tf
+import os
 
 
-class Seq2Seq():
+class Seq2Seq(RichModel):
 
     def __init__(self,
                  mode,
@@ -216,10 +218,49 @@ class Seq2Seq():
             target_tensors=decoder_target)
 
     def save(self, path, overwrite):
-        print('save hold')
+        """Rewrite save model, only save weight from decoder and kernel_S encoder
+
+        Arguments:
+            path {str} -- string path to save model
+            overwrite {bool} -- overwrite existing model or not
+        """
+        if self.trainable_model:
+            self.model_decoder.save_weights(path, overwrite=overwrite)
+
+        # weights values for kernel_S
+        weight_values = self._get_weight_values(
+            layer_name='seq2seq_encoder_factored_lstm',
+            weight_name='kernel_S_{}'.format(self.mode))
+
+        # save kernel_S weights
+        file_path = '{}.kernel_S.{}.npy'.format(path, self.mode)
+        if (not os.path.exists(file_path)) or overwrite:
+            print('save factored weight for emotion', self.mode)
+            np.save(file_path, weight_values)
 
     def load(self, path):
-        print('load hold')
+        """Rewrite load model, only load weight from decoder and kernel_S encoder
+
+        Arguments:
+            path {str} -- string path for load model
+        """
+        initial_weight_kernel_S = self._get_weight_values(
+            layer_name='seq2seq_encoder_factored_lstm',
+            weight_name='kernel_S_{}'.format(self.mode))
+        self.model_decoder.load_weights(path, by_name=True, skip_mismatch=True)
+
+        try:
+            kernel_S_value = np.load('{}.kernel_S.{}.npy'.format(
+                path, self.mode))
+        except IOError as e:
+            print(e)
+            print('But it\'s ok, it will be skipped')
+            kernel_S_value = initial_weight_kernel_S
+
+        self._set_weight_values(
+            layer_name='seq2seq_encoder_factored_lstm',
+            weight_values=kernel_S_value,
+            weight_name='kernel_S_{}'.format(self.mode))
 
     def set_encoder_weights(self, stylenet):
         """set encoder weights from stylenet model decoder
@@ -235,12 +276,19 @@ class Seq2Seq():
         assert self.embedding_size == stylenet.embedding_size
         assert self.num_words == stylenet.num_words
 
-        for i, _ in enumerate(
-                zip(stylenet.model_decoder.layers, self.model_encoder.layers)):
+        intersection_layers = zip(stylenet.model_decoder.layers,
+                                  self.model_encoder.layers)
+        for i, _ in enumerate(intersection_layers):
             w = stylenet.model_decoder.layers[i].get_weights()
             self.model_encoder.layers[i].set_weights(w)
 
-    def predict(self, states, token_start, token_end, max_tokens=30):
+    def predict(self,
+                transfer_values,
+                input_tokens,
+                token_start,
+                token_end,
+                max_tokens=30):
+        states = self.model_encoder([transfer_values], [input_tokens])
         shape = (1, max_tokens)
         decoder_input_data = np.zeros(shape=shape, dtype=np.int)
 

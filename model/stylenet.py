@@ -6,11 +6,12 @@ from keras.utils.np_utils import np
 # from keras.utils import plot_model
 from nn import FactoredLSTM
 from loss import sparse_cross_entropy
+from model.base import RichModel
 import tensorflow as tf
 import os
 
 
-class StyleNet():
+class StyleNet(RichModel):
 
     def __init__(self,
                  mode='factual',
@@ -88,16 +89,16 @@ class StyleNet():
             name='decoder_output',
             trainable=self.trainable_model)
 
-        def connect_lstm(states, uniform_state, decoder_net):
+        def connect_lstm(states, uniform_state, lstm_layers, net):
 
-            for i in range(self.lstm_layers):
-                decoder_net, state_h, state_c = decoder_factored_lstm[i](
-                    decoder_net, initial_state=states)
+            for i in range(len(lstm_layers)):
+                net, state_h, state_c = lstm_layers[i](
+                    net, initial_state=states)
 
                 if not uniform_state:
                     states = [state_h, state_c]
 
-            return decoder_net
+            return net, state_h, state_c
 
         def connect_decoder(encoder_output, decoder_input):
 
@@ -105,31 +106,47 @@ class StyleNet():
 
             if encoder_output is None:
                 states = None
-                decoder_net = connect_lstm(states, False, decoder_net)
+                decoder_net, state_h, state_c = connect_lstm(
+                    states=states,
+                    uniform_state=False,
+                    lstm_layers=decoder_factored_lstm,
+                    net=decoder_net)
                 decoder_output = decoder_dense(decoder_net)
-                return decoder_output
+                return decoder_output, state_h, state_c
 
             decoder_transfer = decoder_transfer_map(encoder_output)
 
             if self.injection_mode == 'init':
                 states = [decoder_transfer, decoder_transfer]
-                decoder_net = connect_lstm(states, True, decoder_net)
+                decoder_net, state_h, state_c = connect_lstm(
+                    states=states,
+                    uniform_state=True,
+                    lstm_layers=decoder_factored_lstm,
+                    net=decoder_net)
+
+                decoder_output = decoder_dense(decoder_net)
+                return decoder_output, state_h, state_c
 
             if self.injection_mode == 'pre':
                 states = None
                 decoder_init = RepeatVector(1)(decoder_transfer)
                 decoder_net = Concatenate(axis=1)([decoder_init, decoder_net])
-                decoder_net = connect_lstm(states, False, decoder_net)
+                decoder_net, state_h, state_c = connect_lstm(
+                    states=states,
+                    uniform_state=False,
+                    lstm_layers=decoder_factored_lstm,
+                    net=decoder_net)
                 # shift output lstm 1 step to the right
                 decoder_net = Lambda(lambda x: x[:, 1:, :])(decoder_net)
 
-            decoder_output = decoder_dense(decoder_net)
+                decoder_output = decoder_dense(decoder_net)
+                return decoder_output, state_h, state_c
 
-            return decoder_output
+            return None, None, None
 
         # connect full model
         encoder_output = transfer_layer.output
-        decoder_output = connect_decoder(encoder_output, decoder_input)
+        decoder_output, _, _ = connect_decoder(encoder_output, decoder_input)
         self.model = Model(
             inputs=[image_model.input, decoder_input], outputs=[decoder_output])
 
@@ -138,13 +155,14 @@ class StyleNet():
             inputs=[image_model.input], outputs=[transfer_layer.output])
 
         # connect decoder FactoredLSTM
-        decoder_output = connect_decoder(transfer_values_input, decoder_input)
+        decoder_output, _, _ = connect_decoder(transfer_values_input,
+                                               decoder_input)
         self.model_decoder = Model(
             inputs=[transfer_values_input, decoder_input],
             outputs=[decoder_output])
 
         # connect decoder FactoredLSTM without transfer value
-        decoder_output = connect_decoder(None, decoder_input)
+        decoder_output, _, _ = connect_decoder(None, decoder_input)
         self.model_decoder_partial = Model(
             inputs=[decoder_input], outputs=[decoder_output])
 
@@ -195,7 +213,7 @@ class StyleNet():
 
     def save(self, path, overwrite):
         """Rewrite save model, only save weight from decoder
- 
+
         Arguments:
             path {str} -- string path to save model
             overwrite {bool} -- overwrite existing model or not
@@ -204,16 +222,9 @@ class StyleNet():
             self.model_decoder.save_weights(path, overwrite=overwrite)
 
         # weights values for kernel_S
-        weight_values = []
-        for layer in self.model.layers:
-            if layer.name[:-2] != 'decoder_factored_lstm':
-                continue
-            for weight, value in zip(layer.weights, layer.get_weights()):
-                name = weight.name.split(':')[0].split('/')[1]
-                if name != 'kernel_S_{}'.format(self.mode):
-                    continue
-                weight_values.append([value])
-                break
+        weight_values = self._get_weight_values(
+            layer_name='decoder_factored_lstm',
+            weight_name='kernel_S_{}'.format(self.mode))
 
         # save kernel_S weights
         file_path = '{}.kernel_S.{}.npy'.format(path, self.mode)
@@ -222,10 +233,16 @@ class StyleNet():
             np.save(file_path, weight_values)
 
     def load(self, path):
+        """Rewrite load model, only load weight from decoder
+
+        Arguments:
+            path {str} -- string path for load model
+        """
         initial_weight_kernel_S = self._get_weight_values(
             layer_name='decoder_factored_lstm',
             weight_name='kernel_S_{}'.format(self.mode))
         self.model_decoder.load_weights(path, by_name=True, skip_mismatch=True)
+
         try:
             kernel_S_value = np.load('{}.kernel_S.{}.npy'.format(
                 path, self.mode))
@@ -233,48 +250,8 @@ class StyleNet():
             print(e)
             print('But it\'s ok, it will be skipped')
             kernel_S_value = initial_weight_kernel_S
+
         self._set_weight_values(
             layer_name='decoder_factored_lstm',
             weight_values=kernel_S_value,
             weight_name='kernel_S_{}'.format(self.mode))
-
-    def _get_weight_values(self, layer_name, weight_name=None):
-        weight_values = []
-        for i, layer in enumerate(self.model_decoder.layers):
-            if layer.name[:-2] == layer_name:
-                if not weight_name:
-                    weight_values.append(layer.get_weights())
-                    continue
-                for weight, value in zip(layer.weights, layer.get_weights()):
-                    name = weight.name.split(':')[0].split('/')[1]
-                    if name != weight_name:
-                        continue
-                    weight_values.append([value])
-                    break
-        return weight_values
-
-    def _set_weight_values(self, layer_name, weight_values, weight_name=None):
-        layer_target_i = 0
-        for layer in self.model_decoder.layers:
-            if layer.name[:-2] == layer_name:
-                layer_target_i += 1
-        if layer_target_i != len(weight_values):
-            raise ValueError(
-                'length of weight_values didn\'t match with layer count in model, expect {} got {}'
-                .format(layer_target_i, len(weight_values)))
-        layer_target_i = 0
-        for i, layer in enumerate(self.model_decoder.layers):
-            if layer.name[:-2] == layer_name:
-                weights = []
-                if not weight_name:
-                    weights = weight_values[layer_target_i]
-                else:
-                    for weight, value in zip(layer.weights,
-                                             layer.get_weights()):
-                        name = weight.name.split(':')[0].split('/')[1]
-                        if name != weight_name:
-                            weights.append(value)
-                            continue
-                        weights.append(weight_values[layer_target_i][0])
-                self.model_decoder.layers[i].set_weights(weights)
-                layer_target_i += 1

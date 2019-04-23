@@ -209,7 +209,7 @@ class StyleNet(RichModel):
 
             count_tokens += 1
 
-        return output_tokens
+        return output_tokens, transfer_values
 
     def save(self, path, overwrite):
         """Rewrite save model, only save weight from decoder

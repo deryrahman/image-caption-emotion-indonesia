@@ -103,13 +103,13 @@ def main(args):
         filenames_val, captions_val = val
         filenames_test, captions_test = test
 
-        # for local testing only
-        filenames_train = filenames_train[:50]
-        captions_train = captions_train[:50]
-        filenames_val = filenames_val[:5]
-        captions_val = captions_val[:5]
-        filenames_test = filenames_test[:5]
-        captions_test = captions_test[:5]
+        # # for local testing only
+        # filenames_train = filenames_train[:50]
+        # captions_train = captions_train[:50]
+        # filenames_val = filenames_val[:5]
+        # captions_val = captions_val[:5]
+        # filenames_test = filenames_test[:5]
+        # captions_test = captions_test[:5]
 
         num_captions_train = [len(captions) for captions in captions_train]
         total_num_captions_train = np.sum(num_captions_train)
@@ -219,6 +219,7 @@ def main(args):
                 image_path=dataset_path + '/img/' + filename,
                 tokenizer=tokenizer,
                 stylenet=stylenet,
+                k=beam_search,
                 mode='factual')
             predictions.append(output_text)
             references.append(refs)
@@ -237,13 +238,13 @@ def main(args):
         filenames_val, captions_val = val
         filenames_test, captions_test = test
 
-        # for local testing only
-        filenames_train = filenames_train[:50]
-        captions_train = captions_train[:50]
-        filenames_val = filenames_val[:5]
-        captions_val = captions_val[:5]
-        filenames_test = filenames_test[:5]
-        captions_test = captions_test[:5]
+        # # for local testing only
+        # filenames_train = filenames_train[:50]
+        # captions_train = captions_train[:50]
+        # filenames_val = filenames_val[:5]
+        # captions_val = captions_val[:5]
+        # filenames_test = filenames_test[:5]
+        # captions_test = captions_test[:5]
 
         mp = {}
         for filename, caption in zip(filenames_factual, captions_factual):
@@ -455,6 +456,7 @@ def main(args):
                     tokenizer=tokenizer,
                     stylenet=stylenet,
                     mode=mode,
+                    k=beam_search,
                     seq2seq=seq2seq)
                 predictions.append(output_text)
                 references.append(refs)
@@ -491,6 +493,7 @@ def main(args):
                     image_path=dataset_path + '/img/' + filename,
                     tokenizer=tokenizer,
                     stylenet=stylenet,
+                    k=beam_search,
                     mode=mode)
                 predictions.append(output_text)
                 references.append(refs)
@@ -509,7 +512,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--beam_search',
         type=int,
-        default=3,
+        default=1,
         help='beam search for generating sequence')
     parser.add_argument(
         '--load_model',

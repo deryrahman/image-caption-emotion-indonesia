@@ -10,10 +10,6 @@ def generate_caption(image_path,
                      seq2seq=None,
                      max_tokens=30):
 
-    if mode != 'factual':
-        assert stylenet is not None
-        assert seq2seq.mode == mode
-
     token_start = tokenizer.word_index[mark_start.strip()]
     token_end = tokenizer.word_index[mark_end.strip()]
 
@@ -27,7 +23,7 @@ def generate_caption(image_path,
         token_end=token_end,
         max_tokens=max_tokens)
 
-    if mode != 'factual':
+    if seq2seq is not None:
         output_tokens = seq2seq.predict(
             transfer_values=transfer_values,
             input_tokens=output_tokens,

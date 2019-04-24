@@ -275,11 +275,20 @@ class Seq2Seq(RichModel):
         assert self.embedding_size == stylenet.embedding_size
         assert self.num_words == stylenet.num_words
 
+        initial_kernel_S_weight = self._get_weight_values(
+            layer_name='seq2seq_encoder_factored_lstm',
+            weight_name='kernel_S_{}'.format(self.mode))
+
         intersection_layers = zip(stylenet.model_decoder.layers,
                                   self.model_encoder.layers)
         for i, _ in enumerate(intersection_layers):
             w = stylenet.model_decoder.layers[i].get_weights()
             self.model_encoder.layers[i].set_weights(w)
+
+        self._set_weight_values(
+            layer_name='seq2seq_encoder_factored_lstm',
+            weight_values=initial_kernel_S_weight,
+            weight_name='kernel_S_{}'.format(self.mode))
 
     def predict(self,
                 transfer_values,

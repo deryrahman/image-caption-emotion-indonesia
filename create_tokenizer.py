@@ -5,15 +5,18 @@ import argparse
 import json
 
 
+def assert_path_error(path):
+    if not os.path.exists(path):
+        raise ValueError(path + ' not found')
+
+
 def main(args):
     dataset_path = args.dataset_path
     num_words = args.num_words
     if num_words < 0:
         num_words = None
-    if not os.path.exists(dataset_path):
-        raise ValueError('dataset_path did\'t found')
-    if not os.path.exists(dataset_path + '/captions.json'):
-        raise ValueError('captions.json did\'t found')
+    assert_path_error(dataset_path)
+    assert_path_error(dataset_path + '/captions.json')
 
     with open(dataset_path + '/captions.json', 'r') as f:
         caption_data = json.load(f)

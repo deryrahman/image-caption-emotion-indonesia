@@ -1,7 +1,6 @@
 from preprocess.dataset import load_caption
 from model import StyleNet, Seq2Seq
-from preprocess.images import process_images_all
-from preprocess.tokenizer import mark_captions, flatten, TokenizerWrap
+from preprocess.tokenizer import mark_captions
 from utils.generator import stylenet_batch_generator, seq2seq_batch_generator
 from utils.evaluator import bleu_evaluator
 from utils.predictor import generate_caption
@@ -13,6 +12,12 @@ import tensorflow as tf
 import numpy as np
 import argparse
 import os
+import pickle
+
+
+def assert_path_error(path):
+    if not os.path.exists(path):
+        raise ValueError(path + ' not found')
 
 
 def main(args):
@@ -26,6 +31,7 @@ def main(args):
     load_model = args.load_model
     gpu_frac = args.gpu_frac
     with_transfer_value = args.with_transfer_value
+    emotion_training_mode = args.emotion_training_mode
 
     state_size = args.state_size
     embedding_size = args.embedding_size
@@ -36,8 +42,17 @@ def main(args):
     epsilon = args.epsilon
     lstm_layers = args.lstm_layers
     batch_size = args.batch_size
-    num_words = args.num_words
     early_stop = args.early_stop
+
+    assert_path_error(dataset_path)
+    assert_path_error(dataset_path + '/' + mode)
+    assert_path_error(dataset_path + '/img')
+    assert_path_error(dataset_path + '/captions.json')
+    assert_path_error(dataset_path + '/cache/tokenizer.pkl')
+    assert_path_error(dataset_path + '/cache/transfer_values.pkl')
+
+    if not os.path.exists(checkpoints_path + '/stylenet'):
+        os.mkdir(checkpoints_path + '/stylenet')
 
     config = tf.ConfigProto()
     off = rewriter_config_pb2.RewriterConfig.OFF
@@ -47,46 +62,25 @@ def main(args):
     config.gpu_options.per_process_gpu_memory_fraction = gpu_frac
     K.tensorflow_backend.set_session(tf.Session(config=config))
 
-    modes = ['happy', 'sad', 'angry']
-    captions = []
-    filenames = []
-    for md in modes + ['factual']:
-        train, val, test = load_caption(dataset_path + '/' + md)
-        filenames_train, captions_train = train
-        filenames_val, captions_val = val
-        filenames_test, captions_test = test
-        if md == 'factual':
-            filenames += filenames_train + filenames_val + filenames_test
-        captions += captions_train + captions_val + captions_test
-
-    encoder_resnet152 = StyleNet().model_encoder
-
-    img_size = K.int_shape(encoder_resnet152.input)[1:3]
-    transfer_values_size = K.int_shape(encoder_resnet152.output)[1]
-    print('img_size', img_size)
-    print('transfer_values_size', transfer_values_size)
-
-    transfer_values = process_images_all(
-        folder_path=dataset_path,
-        filenames=filenames,
-        img_size=img_size,
-        transfer_values_size=transfer_values_size,
-        image_model_transfer=encoder_resnet152,
-        batch_size=64)
+    with open(dataset_path + '/cache/transfer_values.pkl', 'rb') as f:
+        transfer_values = pickle.load(f)
     print('transfer_values count', len(transfer_values))
 
-    captions_marked = mark_captions(captions)
-    captions_flat = flatten(captions_marked)
-    tokenizer = TokenizerWrap(texts=captions_flat, num_words=num_words)
+    with open(dataset_path + '/cache/tokenizer.pkl', 'rb') as f:
+        tokenizer = pickle.load(f)
+    num_words = tokenizer.num_words
     print('num_words', num_words)
 
-    if not os.path.exists(checkpoints_path + '/stylenet'):
-        os.mkdir(checkpoints_path + '/stylenet')
-
     path_checkpoint = checkpoints_path + (
-        '/stylenet/{}.checkpoint.id.injection{}.layer{}.factored{}.state{}.embedding{}.keras'
-    ).format(dataset, injection_mode, lstm_layers, factored_size, state_size,
-             embedding_size)
+        '/stylenet/{dataset}.checkpoint.id.injection{injection_mode}'
+        '.layer{lstm_layers}.factored{factored_size}.state{state_size}.embedding{embedding_size}.keras'
+    ).format(
+        dataset=dataset,
+        injection_mode=injection_mode,
+        lstm_layers=lstm_layers,
+        factored_size=factored_size,
+        state_size=state_size,
+        embedding_size=embedding_size)
     log_dir = (
         logs_path + '/stylenet/{mode}/{injection}/'
         '{dataset}_epoch_{start_from}_{to}_layer{layer_size}_factored{factored_size}_'
@@ -104,14 +98,17 @@ def main(args):
     if mode == 'factual':
         train, val, test = load_caption(dataset_path + '/factual')
 
-        # # for local testing only
-        # train = filenames_train[:50], captions_train[:50]
-        # val = filenames_val[:5], captions_val[:5]
-        # test = filenames_test[:5], captions_test[:5]
-
         filenames_train, captions_train = train
         filenames_val, captions_val = val
         filenames_test, captions_test = test
+
+        # for local testing only
+        filenames_train = filenames_train[:50]
+        captions_train = captions_train[:50]
+        filenames_val = filenames_val[:5]
+        captions_val = captions_val[:5]
+        filenames_test = filenames_test[:5]
+        captions_test = captions_test[:5]
 
         num_captions_train = [len(captions) for captions in captions_train]
         total_num_captions_train = np.sum(num_captions_train)
@@ -235,28 +232,28 @@ def main(args):
 
         train, val, test = load_caption(dataset_path + '/' + mode)
 
-        # # for local testing only
-        # train = filenames_train[:50], captions_train[:50]
-        # val = filenames_val[:5], captions_val[:5]
-        # test = filenames_test[:5], captions_test[:5]
+        filenames_train, captions_train = train
+        filenames_val, captions_val = val
+        filenames_test, captions_test = test
 
-        # filenames_train, captions_train = train
-        # filenames_val, captions_val = val
-        # filenames_test, captions_test = test
+        # for local testing only
+        filenames_train = filenames_train[:50]
+        captions_train = captions_train[:50]
+        filenames_val = filenames_val[:5]
+        captions_val = captions_val[:5]
+        filenames_test = filenames_test[:5]
+        captions_test = captions_test[:5]
 
         mp = {}
         for filename, caption in zip(filenames_factual, captions_factual):
             mp[filename] = caption
 
-        encoder_input_train, decoder_input_train = [
-            mp[filename] for filename in filenames_train
-        ], [captions for captions in captions_train]
-        encoder_input_val, decoder_input_val = [
-            mp[filename] for filename in filenames_val
-        ], [captions for captions in captions_val]
-        encoder_input_test, decoder_input_test = [
-            mp[filename] for filename in filenames_test
-        ], [captions for captions in captions_test]
+        encoder_input_train = [mp[filename] for filename in filenames_train]
+        decoder_input_train = captions_train
+        encoder_input_val = [mp[filename] for filename in filenames_val]
+        decoder_input_val = captions_val
+        encoder_input_test = [mp[filename] for filename in filenames_test]
+        decoder_input_test = captions_test
 
         encoder_input_train_marked = mark_captions(encoder_input_train)
         tokens_encoder_input_train = tokenizer.captions_to_tokens(
@@ -286,25 +283,67 @@ def main(args):
         transfer_values_test = np.array(
             [transfer_values[filename] for filename in filenames_test])
 
-        generator_train = seq2seq_batch_generator(
-            batch_size=batch_size,
-            transfer_values=transfer_values_train,
-            tokens_encoder_input=tokens_encoder_input_train,
-            tokens_decoder_input=tokens_decoder_input_train)
-        generator_val = seq2seq_batch_generator(
-            batch_size=batch_size,
-            transfer_values=transfer_values_val,
-            tokens_encoder_input=tokens_encoder_input_val,
-            tokens_decoder_input=tokens_decoder_input_val)
-        generator_test = seq2seq_batch_generator(
-            batch_size=batch_size,
-            transfer_values=transfer_values_test,
-            tokens_encoder_input=tokens_encoder_input_test,
-            tokens_decoder_input=tokens_decoder_input_test)
+        if emotion_training_mode == 'seq2seq':
+            generator_train = seq2seq_batch_generator(
+                batch_size=batch_size,
+                transfer_values=transfer_values_train,
+                tokens_encoder_input=tokens_encoder_input_train,
+                tokens_decoder_input=tokens_decoder_input_train,
+                with_transfer_values=with_transfer_value == 1)
+            generator_val = seq2seq_batch_generator(
+                batch_size=batch_size,
+                transfer_values=transfer_values_val,
+                tokens_encoder_input=tokens_encoder_input_val,
+                tokens_decoder_input=tokens_decoder_input_val,
+                with_transfer_values=with_transfer_value == 1)
+            generator_test = seq2seq_batch_generator(
+                batch_size=batch_size,
+                transfer_values=transfer_values_test,
+                tokens_encoder_input=tokens_encoder_input_test,
+                tokens_decoder_input=tokens_decoder_input_test,
+                with_transfer_values=with_transfer_value == 1)
 
-        train_steps = len(filenames_train) // batch_size
-        val_steps = len(filenames_val) // batch_size
-        test_steps = len(filenames_test) // batch_size
+        elif emotion_training_mode == 'stylenet':
+            generator_train = stylenet_batch_generator(
+                batch_size=batch_size,
+                transfer_values=transfer_values_train,
+                tokens=tokens_decoder_input_train,
+                with_transfer_values=with_transfer_value == 1)
+            generator_val = stylenet_batch_generator(
+                batch_size=batch_size,
+                transfer_values=transfer_values_val,
+                tokens=tokens_decoder_input_val,
+                with_transfer_values=with_transfer_value == 1)
+            generator_test = stylenet_batch_generator(
+                batch_size=batch_size,
+                transfer_values=transfer_values_test,
+                tokens=tokens_decoder_input_test,
+                with_transfer_values=with_transfer_value == 1)
+
+        if emotion_training_mode == 'seq2seq':
+
+            total_num_captions_train = np.sum(
+                [len(caption) for caption in encoder_input_train])
+            total_num_captions_val = np.sum(
+                [len(caption) for caption in encoder_input_val])
+            total_num_captions_test = np.sum(
+                [len(caption) for caption in encoder_input_test])
+            train_steps = total_num_captions_train // batch_size
+            val_steps = total_num_captions_val // batch_size
+            test_steps = total_num_captions_test // batch_size
+
+        elif emotion_training_mode == 'stylenet':
+
+            total_num_captions_train = np.sum(
+                [len(caption) for caption in decoder_input_train])
+            total_num_captions_val = np.sum(
+                [len(caption) for caption in decoder_input_val])
+            total_num_captions_test = np.sum(
+                [len(caption) for caption in decoder_input_test])
+            train_steps = total_num_captions_train // batch_size
+            val_steps = total_num_captions_val // batch_size
+            test_steps = total_num_captions_test // batch_size
+
         print('train steps', train_steps)
         print('val steps', val_steps)
         print('test steps', test_steps)
@@ -323,42 +362,51 @@ def main(args):
             beta_2=beta_2,
             epsilon=epsilon)
 
-        seq2seq = Seq2Seq(
-            mode=mode,
-            trainable_model=False,
-            injection_mode=injection_mode,
-            num_words=num_words,
-            state_size=state_size,
-            embedding_size=embedding_size,
-            factored_size=factored_size,
-            encoder_lstm_layers=lstm_layers,
-            decoder_lstm_layers=lstm_layers,
-            learning_rate=learning_rate,
-            beta_1=beta_1,
-            beta_2=beta_2,
-            epsilon=epsilon)
-
         try:
             stylenet.load(path_checkpoint)
         except Exception as error:
             print("Error trying to load checkpoint.")
             print(error)
 
-        path_checkpoint += '.seq2seq'
-        if load_model == 1:
-            try:
-                seq2seq.load(path_checkpoint)
-            except Exception as error:
-                print("Error trying to load checkpoint.")
-                print(error)
-        seq2seq.set_encoder_weights(stylenet)
+        if emotion_training_mode == 'seq2seq':
 
-        callback_checkpoint = ModelCheckpoint(
-            seq2seq,
-            filepath=path_checkpoint,
-            monitor='val_loss',
-            verbose=1,
-            save_best_only=True)
+            seq2seq = Seq2Seq(
+                mode=mode,
+                injection_mode=injection_mode,
+                num_words=num_words,
+                state_size=state_size,
+                embedding_size=embedding_size,
+                factored_size=factored_size,
+                encoder_lstm_layers=lstm_layers,
+                decoder_lstm_layers=lstm_layers,
+                learning_rate=learning_rate,
+                beta_1=beta_1,
+                beta_2=beta_2,
+                epsilon=epsilon)
+
+            path_checkpoint += '.seq2seq'
+            if load_model == 1:
+                try:
+                    seq2seq.load(path_checkpoint)
+                except Exception as error:
+                    print("Error trying to load checkpoint.")
+                    print(error)
+            seq2seq.set_encoder_weights(stylenet)
+
+        if emotion_training_mode == 'seq2seq':
+            callback_checkpoint = ModelCheckpoint(
+                seq2seq,
+                filepath=path_checkpoint,
+                monitor='val_loss',
+                verbose=1,
+                save_best_only=True)
+        elif emotion_training_mode == 'stylenet':
+            callback_checkpoint = ModelCheckpoint(
+                stylenet,
+                filepath=path_checkpoint,
+                monitor='val_loss',
+                verbose=1,
+                save_best_only=True)
 
         callback_tensorboard = TensorBoard(
             log_dir=log_dir, histogram_freq=0, write_graph=False)
@@ -370,40 +418,93 @@ def main(args):
                 verbose=1,
                 patience=early_stop,
                 restore_best_weights=True)
-            callbacks = [
-                callback_checkpoint, callback_earystoping, callback_tensorboard
-            ]
+            callbacks += [callback_earystoping]
 
-        seq2seq.model.fit_generator(
-            generator=generator_train,
-            steps_per_epoch=train_steps,
-            epochs=epoch_num,
-            validation_data=generator_val,
-            validation_steps=val_steps,
-            callbacks=callbacks)
+        if emotion_training_mode == 'seq2seq':
+            if with_transfer_value == 1:
+                seq2seq.model.fit_generator(
+                    generator=generator_train,
+                    steps_per_epoch=train_steps,
+                    epochs=epoch_num,
+                    validation_data=generator_val,
+                    validation_steps=val_steps,
+                    callbacks=callbacks)
 
-        scores = seq2seq.model.evaluate_generator(
-            generator=generator_test, steps=test_steps, verbose=1)
-        print('test loss', scores)
+                scores = seq2seq.model.evaluate_generator(
+                    generator=generator_test, steps=test_steps, verbose=1)
+                print('test loss', scores)
+            else:
+                seq2seq.model_partial.fit_generator(
+                    generator=generator_train,
+                    steps_per_epoch=train_steps,
+                    epochs=epoch_num,
+                    validation_data=generator_val,
+                    validation_steps=val_steps,
+                    callbacks=callbacks)
 
-        references = []
-        predictions = []
-        for filename, refs in zip(filenames_test, captions_test):
-            _, output_text = generate_caption(
-                image_path=dataset_path + '/img/' + filename,
-                tokenizer=tokenizer,
-                stylenet=stylenet,
-                mode=mode,
-                seq2seq=seq2seq)
-            predictions.append(output_text)
-            references.append(refs)
-        print(bleu_evaluator(references, predictions))
+                scores = seq2seq.model_partial.evaluate_generator(
+                    generator=generator_test, steps=test_steps, verbose=1)
+                print('test loss', scores)
+
+            references = []
+            predictions = []
+            for filename, refs in zip(filenames_test, captions_test):
+                _, output_text = generate_caption(
+                    image_path=dataset_path + '/img/' + filename,
+                    tokenizer=tokenizer,
+                    stylenet=stylenet,
+                    mode=mode,
+                    seq2seq=seq2seq)
+                predictions.append(output_text)
+                references.append(refs)
+            print(bleu_evaluator(references, predictions))
+
+        elif emotion_training_mode == 'stylenet':
+            if with_transfer_value == 1:
+                stylenet.model_decoder.fit_generator(
+                    generator=generator_train,
+                    steps_per_epoch=train_steps,
+                    epochs=epoch_num,
+                    validation_data=generator_val,
+                    validation_steps=val_steps,
+                    callbacks=callbacks)
+                scores = stylenet.model_decoder.evaluate_generator(
+                    generator=generator_test, steps=test_steps, verbose=1)
+                print('test loss', scores)
+            else:
+                stylenet.model_decoder_partial.fit_generator(
+                    generator=generator_train,
+                    steps_per_epoch=train_steps,
+                    epochs=epoch_num,
+                    validation_data=generator_val,
+                    validation_steps=val_steps,
+                    callbacks=callbacks)
+                scores = stylenet.model_decoder_partial.evaluate_generator(
+                    generator=generator_test, steps=test_steps, verbose=1)
+                print('test loss', scores)
+
+            references = []
+            predictions = []
+            for filename, refs in zip(filenames_test, captions_test):
+                _, output_text = generate_caption(
+                    image_path=dataset_path + '/img/' + filename,
+                    tokenizer=tokenizer,
+                    stylenet=stylenet,
+                    mode=mode)
+                predictions.append(output_text)
+                references.append(refs)
+            print(bleu_evaluator(references, predictions))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='StyleNet Indonesia: Generate Image Commenting With Emotions'
     )
+    parser.add_argument(
+        '--emotion_training_mode',
+        type=str,
+        default='seq2seq',
+        help='training mode for emotion. seq2seq or pure stylenet')
     parser.add_argument(
         '--load_model',
         type=int,
@@ -429,11 +530,6 @@ if __name__ == '__main__':
         type=str,
         default='./logs',
         help='path for Tensorboard logging')
-    parser.add_argument(
-        '--num_words',
-        type=int,
-        default=10000,
-        help='num words used for embedding layer')
     parser.add_argument(
         '--mode',
         type=str,

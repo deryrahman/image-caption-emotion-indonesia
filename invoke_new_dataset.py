@@ -1,15 +1,24 @@
 from preprocess.dataset import invoke_emotion_to_dataset, invoke_edited_to_dataset
 import argparse
+import os
+
+
+def assert_path_error(path):
+    if not os.path.exists(path):
+        raise ValueError(path + ' not found')
 
 
 def main(args):
     mongo_dump_path = args.mongo_dump_path
     dataset = args.dataset
-    dataset_folder = args.dataset_folder
-    invoke_edited_to_dataset(mongo_dump_path, dataset_folder)
+    dataset_path = args.dataset_path
+
+    assert_path_error(mongo_dump_path)
+    assert_path_error(dataset_path)
+
+    invoke_edited_to_dataset(mongo_dump_path, dataset_path)
     for mode in ['happy', 'sad', 'angry']:
-        invoke_emotion_to_dataset(mongo_dump_path, dataset_folder, dataset,
-                                  mode)
+        invoke_emotion_to_dataset(mongo_dump_path, dataset_path, dataset, mode)
 
 
 if __name__ == '__main__':
@@ -27,7 +36,7 @@ if __name__ == '__main__':
         default='flickr',
         help='dataset either flickr or coco')
     parser.add_argument(
-        '--dataset_folder',
+        '--dataset_path',
         type=str,
         default='./dataset/flickr10k',
         help='dataset folder path')

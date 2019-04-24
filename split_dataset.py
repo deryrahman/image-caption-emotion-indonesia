@@ -5,18 +5,19 @@ import pickle
 import os
 
 
+def assert_path_error(path):
+    if not os.path.exists(path):
+        raise ValueError(path + ' not found')
+
+
 def main(args):
     dataset_path = args.dataset_path
     val = args.val_percentage
     test = args.test_percentage
 
-    if not os.path.exists(dataset_path):
-        raise ValueError('dataset_path did\'t found')
-    if not os.path.exists(dataset_path + '/cache/tokenizer.pkl'):
-        raise ValueError(
-            'tokenizer.pkl didn\'t found. please run create_tokenizer first')
-    if not os.path.exists(dataset_path + '/captions.json'):
-        raise ValueError('captions.json did\'t found')
+    assert_path_error(dataset_path)
+    assert_path_error(dataset_path + '/cache/tokenizer.pkl')
+    assert_path_error(dataset_path + '/captions.json')
 
     with open(dataset_path + '/cache/tokenizer.pkl', 'rb') as f:
         tokenizer = pickle.load(f)

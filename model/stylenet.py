@@ -185,7 +185,12 @@ class StyleNet(RichModel):
             target_tensors=[decoder_target])
         # plot_model(self.model, to_file='stylenet.png', show_shapes=True)
 
-    def predict(self, image, token_start, token_end, max_tokens=30):
+    def predict(self, image, token_start, token_end, k=3, max_tokens=30):
+
+        def softmax(x):
+            e_x = np.exp(x - np.max(x))
+            return e_x / e_x.sum(axis=0)
+
         image_batch = np.expand_dims(image, axis=0)
         transfer_values = self.model_encoder.predict(image_batch)
 
@@ -193,23 +198,38 @@ class StyleNet(RichModel):
         decoder_input_data = np.zeros(shape=shape, dtype=np.int)
 
         token_int = token_start
-        output_tokens = [token_int]
+        outputs_tokens = [(0, [token_int])]
         count_tokens = 0
+        tmp = []
 
-        while token_int != token_end and count_tokens < max_tokens:
-            decoder_input_data[0, count_tokens] = token_int
-            x_data = [transfer_values, decoder_input_data]
+        while tmp != outputs_tokens and count_tokens < max_tokens:
 
-            decoder_output = self.model_decoder.predict(x_data)
+            tmp = []
+            for output_tokens in outputs_tokens:
+                token_int = output_tokens[1][-1]
+                if token_int == token_end:
+                    tmp.append(output_tokens)
+                    continue
 
-            token_onehot = decoder_output[0, count_tokens, :]
-            token_int = np.argmax(token_onehot)
+                decoder_input_data[0, count_tokens] = token_int
+                x_data = [transfer_values, decoder_input_data]
 
-            output_tokens.append(token_int)
+                decoder_output = self.model_decoder.predict(x_data)
+
+                tokens_pred = decoder_output[0, count_tokens, :]
+                tokens_pred = softmax(tokens_pred)
+                tokens_int = tokens_pred.argsort()[-k:][::-1]
+
+                for token_int in tokens_int:
+                    score = output_tokens[0] + tokens_pred[token_int]
+                    tokens = output_tokens[1] + [token_int]
+                    tmp.append((score, tokens))
+
+            outputs_tokens = sorted(tmp, key=lambda t: t[0])[-k:]
 
             count_tokens += 1
 
-        return np.array(output_tokens), np.array(transfer_values[0])
+        return np.array(outputs_tokens[0][1]), np.array(transfer_values[0])
 
     def save(self, path, overwrite):
         """Rewrite save model, only save weight from decoder

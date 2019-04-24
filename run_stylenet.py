@@ -43,6 +43,7 @@ def main(args):
     lstm_layers = args.lstm_layers
     batch_size = args.batch_size
     early_stop = args.early_stop
+    beam_search = args.beam_search
 
     assert_path_error(dataset_path)
     assert_path_error(dataset_path + '/' + mode)
@@ -505,6 +506,11 @@ if __name__ == '__main__':
         type=str,
         default='seq2seq',
         help='training mode for emotion. seq2seq or pure stylenet')
+    parser.add_argument(
+        '--beam_search',
+        type=int,
+        default=3,
+        help='beam search for generating sequence')
     parser.add_argument(
         '--load_model',
         type=int,

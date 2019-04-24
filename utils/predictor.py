@@ -6,6 +6,7 @@ from keras import backend as K
 def generate_caption(image_path,
                      tokenizer,
                      stylenet,
+                     k=3,
                      mode='factual',
                      seq2seq=None,
                      max_tokens=30):
@@ -21,7 +22,8 @@ def generate_caption(image_path,
         image=image,
         token_start=token_start,
         token_end=token_end,
-        max_tokens=max_tokens)
+        max_tokens=max_tokens,
+        k=k)
 
     if seq2seq is not None:
         output_tokens = seq2seq.predict(
@@ -29,7 +31,8 @@ def generate_caption(image_path,
             input_tokens=output_tokens,
             token_start=token_start,
             token_end=token_end,
-            max_tokens=max_tokens)
+            max_tokens=max_tokens,
+            k=k)
 
     output_text = ''
     for token in output_tokens:

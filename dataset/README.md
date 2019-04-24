@@ -13,7 +13,7 @@ Contain dataset of partial MSCOCO and Flickr30k
 ```
 path format :
     - /img/ -- contain images
-    - /cache/ -- contain cache
+    - /cache/ -- contain cache (tokenizer dump, transfer_values)
     - /captions.json -- contain all captions data
     - /factual
         - /captions.json -- only contain list of list captions

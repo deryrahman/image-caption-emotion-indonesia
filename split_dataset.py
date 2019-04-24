@@ -1,15 +1,27 @@
 from preprocess.dataset import split_dataset, save_dataset
-from preprocess.tokenizer import mark_captions, flatten, TokenizerWrap
 import json
 import argparse
+import pickle
+import os
 
 
 def main(args):
-    dataset_folder = args.dataset_folder
+    dataset_path = args.dataset_path
     val = args.val_percentage
     test = args.test_percentage
 
-    with open(dataset_folder + '/captions.json', 'r') as f:
+    if not os.path.exists(dataset_path):
+        raise ValueError('dataset_path did\'t found')
+    if not os.path.exists(dataset_path + '/cache/tokenizer.pkl'):
+        raise ValueError(
+            'tokenizer.pkl didn\'t found. please run create_tokenizer first')
+    if not os.path.exists(dataset_path + '/captions.json'):
+        raise ValueError('captions.json did\'t found')
+
+    with open(dataset_path + '/cache/tokenizer.pkl', 'rb') as f:
+        tokenizer = pickle.load(f)
+
+    with open(dataset_path + '/captions.json', 'r') as f:
         caption_data = json.load(f)
 
     all_filenames = {'factual': [], 'happy': [], 'sad': [], 'angry': []}
@@ -25,28 +37,16 @@ def main(args):
     ] for data in caption_data]
 
     modes = ['happy', 'sad', 'angry']
-    captions_flat_all = []
-    for mode in ['factual'] + modes:
-        captions_marked = mark_captions(all_captions[mode])
-        captions_flat = flatten(captions_marked)
-        tokenizer = TokenizerWrap(texts=captions_flat)
-        # remove oov words
-        tmp = tokenizer.texts_to_sequences(captions_flat)
-        captions_flat = tokenizer.sequences_to_texts(tmp)
-        captions_flat_all.extend(captions_flat)
-    tokenizer = TokenizerWrap(texts=captions_flat_all)
-
-    modes = ['happy', 'sad', 'angry']
     for mode in ['factual'] + modes:
         print(mode)
         train_indexes, val_indexes, test_indexes = split_dataset(
-            all_filenames[mode], all_captions[mode],
-            dataset_folder + '/' + mode, tokenizer, val, test)
+            all_filenames[mode], all_captions[mode], dataset_path + '/' + mode,
+            tokenizer, val, test)
         print('train length', len(train_indexes))
         print('val length', len(val_indexes))
         print('test length', len(test_indexes))
         save_dataset(all_filenames[mode], all_captions[mode],
-                     dataset_folder + '/' + mode, train_indexes, val_indexes,
+                     dataset_path + '/' + mode, train_indexes, val_indexes,
                      test_indexes)
 
 
@@ -55,7 +55,7 @@ if __name__ == '__main__':
         description='Splitter: Split dataset into train, val, and test set')
 
     parser.add_argument(
-        '--dataset_folder',
+        '--dataset_path',
         type=str,
         default='./dataset/flickr10k',
         help='dataset folder path')

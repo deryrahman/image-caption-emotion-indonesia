@@ -100,21 +100,21 @@ class StyleNet(RichModel):
 
             return net, state_h, state_c
 
-        def connect_decoder(encoder_output, decoder_input):
+        def connect_decoder(encoder_net, decoder_input):
 
             decoder_net = decoder_embedding(decoder_input)
 
-            if encoder_output is None:
+            if encoder_net is None:
                 states = None
                 decoder_net, state_h, state_c = connect_lstm(
                     states=states,
                     uniform_state=False,
                     lstm_layers=decoder_factored_lstm,
                     net=decoder_net)
-                decoder_output = decoder_dense(decoder_net)
-                return decoder_output, state_h, state_c
 
-            decoder_transfer = decoder_transfer_map(encoder_output)
+                return decoder_net, state_h, state_c
+
+            decoder_transfer = decoder_transfer_map(encoder_net)
 
             if self.injection_mode == 'init':
                 states = [decoder_transfer, decoder_transfer]
@@ -124,8 +124,7 @@ class StyleNet(RichModel):
                     lstm_layers=decoder_factored_lstm,
                     net=decoder_net)
 
-                decoder_output = decoder_dense(decoder_net)
-                return decoder_output, state_h, state_c
+                return decoder_net, state_h, state_c
 
             if self.injection_mode == 'pre':
                 states = None
@@ -139,14 +138,14 @@ class StyleNet(RichModel):
                 # shift output lstm 1 step to the right
                 decoder_net = Lambda(lambda x: x[:, 1:, :])(decoder_net)
 
-                decoder_output = decoder_dense(decoder_net)
-                return decoder_output, state_h, state_c
+                return decoder_net, state_h, state_c
 
             return None, None, None
 
         # connect full model
-        encoder_output = transfer_layer.output
-        decoder_output, _, _ = connect_decoder(encoder_output, decoder_input)
+        encoder_net = transfer_layer.output
+        decoder_net, _, _ = connect_decoder(encoder_net, decoder_input)
+        decoder_output = decoder_dense(decoder_net)
         self.model = Model(
             inputs=[image_model.input, decoder_input], outputs=[decoder_output])
 
@@ -155,14 +154,16 @@ class StyleNet(RichModel):
             inputs=[image_model.input], outputs=[transfer_layer.output])
 
         # connect decoder FactoredLSTM
-        decoder_output, _, _ = connect_decoder(transfer_values_input,
-                                               decoder_input)
+        decoder_net, _, _ = connect_decoder(transfer_values_input,
+                                            decoder_input)
+        decoder_output = decoder_dense(decoder_net)
         self.model_decoder = Model(
             inputs=[transfer_values_input, decoder_input],
             outputs=[decoder_output])
 
         # connect decoder FactoredLSTM without transfer value
-        decoder_output, _, _ = connect_decoder(None, decoder_input)
+        decoder_net, _, _ = connect_decoder(None, decoder_input)
+        decoder_output = decoder_dense(decoder_net)
         self.model_decoder_partial = Model(
             inputs=[decoder_input], outputs=[decoder_output])
 

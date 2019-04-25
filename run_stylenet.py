@@ -55,6 +55,7 @@ def main(args):
     if not os.path.exists(checkpoints_path + '/stylenet'):
         os.mkdir(checkpoints_path + '/stylenet')
 
+    K.clear_session()
     config = tf.ConfigProto()
     off = rewriter_config_pb2.RewriterConfig.OFF
     config.graph_options.rewrite_options.memory_optimization = off

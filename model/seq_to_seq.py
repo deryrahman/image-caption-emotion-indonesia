@@ -3,7 +3,7 @@ from keras.models import Model
 from keras.optimizers import Adam
 from keras.utils.np_utils import np
 from loss import sparse_cross_entropy
-from nn import FactoredLSTM
+from nn import FactoredLSTM, AttentionLayer
 from model.base import RichModel
 import tensorflow as tf
 import os
@@ -13,6 +13,7 @@ class Seq2Seq(RichModel):
 
     def __init__(self,
                  mode,
+                 with_attention=False,
                  trainable_model=False,
                  injection_mode='init',
                  num_words=10000,
@@ -27,6 +28,7 @@ class Seq2Seq(RichModel):
                  encoder_lstm_layers=1,
                  decoder_lstm_layers=1):
         self.mode = mode
+        self.with_attention = with_attention
         self.injection_mode = injection_mode
         self.trainable_model = trainable_model
         self.num_words = num_words
@@ -104,6 +106,9 @@ class Seq2Seq(RichModel):
         decoder_dense = Dense(
             self.num_words, activation='linear', name='seq2seq_decoder_output')
 
+        # attention layer
+        attention = AttentionLayer(name='seq2seq_attention')
+
         def connect_lstm(states, uniform_state, lstm_layers, net):
 
             for i in range(len(lstm_layers)):
@@ -160,23 +165,32 @@ class Seq2Seq(RichModel):
                 uniform_state=True,
                 lstm_layers=decoder_lstm,
                 net=decoder_net)
-            decoder_output = decoder_dense(decoder_net)
 
-            return decoder_output, state_h, state_c
+            return decoder_net, state_h, state_c
 
         # connect full model
-        _, state_h, state_c = connect_encoder(transfer_values_input,
-                                              encoder_input)
-        decoder_output, _, _ = connect_decoder([state_h, state_c],
-                                               decoder_input)
+        encoder_net, state_h, state_c = connect_encoder(transfer_values_input,
+                                                        encoder_input)
+        decoder_net, _, _ = connect_decoder([state_h, state_c], decoder_input)
+
+        if self.with_attention:
+            att_net, attn_states = attention([encoder_net, decoder_net])
+            decoder_net = Concatenate(axis=-1)([decoder_net, att_net])
+
+        decoder_output = decoder_dense(decoder_net)
         self.model = Model(
             inputs=[transfer_values_input, encoder_input, decoder_input],
             outputs=[decoder_output])
 
         # connect full model without transfer value
-        _, state_h, state_c = connect_encoder(None, encoder_input)
-        decoder_output, _, _ = connect_decoder([state_h, state_c],
-                                               decoder_input)
+        encoder_net, state_h, state_c = connect_encoder(None, encoder_input)
+        decoder_net, _, _ = connect_decoder([state_h, state_c], decoder_input)
+
+        if self.with_attention:
+            att_net, attn_states = attention([encoder_net, decoder_net])
+            decoder_net = Concatenate(axis=-1)([decoder_net, att_net])
+
+        decoder_output = decoder_dense(decoder_net)
         self.model_partial = Model(
             inputs=[encoder_input, decoder_input], outputs=[decoder_output])
 
@@ -195,7 +209,8 @@ class Seq2Seq(RichModel):
 
         # connect decoder LSTM
         states = [decoder_input_h, decoder_input_c]
-        decoder_output, _, _ = connect_decoder(states, decoder_input)
+        decoder_net, _, _ = connect_decoder(states, decoder_input)
+        decoder_output = decoder_dense(decoder_net)
         self.model_decoder = Model(
             inputs=[decoder_input] + states, outputs=[decoder_output])
 
@@ -309,17 +324,18 @@ class Seq2Seq(RichModel):
         token_int = token_start
         outputs_tokens = [(0, [token_int])]
         count_tokens = 0
-        tmp = []
 
-        while tmp != outputs_tokens and count_tokens < max_tokens:
+        while count_tokens < max_tokens:
 
             tmp = []
+            is_end_token = True
             for output_tokens in outputs_tokens:
                 token_int = output_tokens[1][-1]
                 if token_int == token_end:
                     tmp.append(output_tokens)
                     continue
 
+                is_end_token = False
                 decoder_input_data[0, count_tokens] = token_int
                 x_data = [decoder_input_data] + states
 
@@ -333,6 +349,9 @@ class Seq2Seq(RichModel):
                     score = output_tokens[0] + tokens_pred[token_int]
                     tokens = output_tokens[1] + [token_int]
                     tmp.append((score, tokens))
+
+            if is_end_token:
+                break
 
             outputs_tokens = sorted(tmp, key=lambda t: t[0])[-k:]
 

@@ -37,7 +37,7 @@ def generate_caption(image_path,
     output_text = ''
     for token in output_tokens:
         output_text += tokenizer.token_to_word(token) + ' '
-    output_text.replace(mark_start, '')
-    output_text.replace(mark_end, '')
+    output_text = output_text.replace(mark_start, '')
+    output_text = output_text.replace(mark_end, '')
 
     return image, output_text

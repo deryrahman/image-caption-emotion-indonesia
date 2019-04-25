@@ -108,7 +108,7 @@ class StyleNet(RichModel):
                 states = None
                 decoder_net, state_h, state_c = connect_lstm(
                     states=states,
-                    uniform_state=False,
+                    uniform_state=True,
                     lstm_layers=decoder_factored_lstm,
                     net=decoder_net)
 
@@ -132,7 +132,7 @@ class StyleNet(RichModel):
                 decoder_net = Concatenate(axis=1)([decoder_init, decoder_net])
                 decoder_net, state_h, state_c = connect_lstm(
                     states=states,
-                    uniform_state=False,
+                    uniform_state=True,
                     lstm_layers=decoder_factored_lstm,
                     net=decoder_net)
                 # shift output lstm 1 step to the right
@@ -201,17 +201,18 @@ class StyleNet(RichModel):
         token_int = token_start
         outputs_tokens = [(0, [token_int])]
         count_tokens = 0
-        tmp = []
 
-        while tmp != outputs_tokens and count_tokens < max_tokens:
+        while count_tokens < max_tokens:
 
             tmp = []
+            is_end_token = True
             for output_tokens in outputs_tokens:
                 token_int = output_tokens[1][-1]
                 if token_int == token_end:
                     tmp.append(output_tokens)
                     continue
 
+                is_end_token = False
                 decoder_input_data[0, count_tokens] = token_int
                 x_data = [transfer_values, decoder_input_data]
 
@@ -225,6 +226,9 @@ class StyleNet(RichModel):
                     score = output_tokens[0] + tokens_pred[token_int]
                     tokens = output_tokens[1] + [token_int]
                     tmp.append((score, tokens))
+
+            if is_end_token:
+                break
 
             outputs_tokens = sorted(tmp, key=lambda t: t[0])[-k:]
 

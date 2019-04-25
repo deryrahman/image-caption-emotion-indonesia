@@ -128,7 +128,7 @@ class Seq2Seq(RichModel):
                 states = None
                 encoder_net, state_h, state_c = connect_lstm(
                     states=states,
-                    uniform_state=False,
+                    uniform_state=True,
                     lstm_layers=encoder_factored_lstm,
                     net=encoder_net)
                 return encoder_net, state_h, state_c
@@ -150,7 +150,7 @@ class Seq2Seq(RichModel):
                 encoder_net = Concatenate(axis=1)([encoder_init, encoder_net])
                 encoder_net, state_h, state_c = connect_lstm(
                     states=states,
-                    uniform_state=False,
+                    uniform_state=True,
                     lstm_layers=encoder_factored_lstm,
                     net=encoder_net)
 

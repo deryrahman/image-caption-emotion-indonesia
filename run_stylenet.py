@@ -31,6 +31,7 @@ def main(args):
     load_model = args.load_model
     gpu_frac = args.gpu_frac
     with_transfer_value = args.with_transfer_value
+    with_attention = args.with_attention
     emotion_training_mode = args.emotion_training_mode
 
     state_size = args.state_size
@@ -378,6 +379,7 @@ def main(args):
 
             seq2seq = Seq2Seq(
                 mode=mode,
+                with_attention=with_attention == 1,
                 injection_mode=injection_mode,
                 num_words=num_words,
                 state_size=state_size,
@@ -559,6 +561,11 @@ if __name__ == '__main__':
         type=int,
         default=1,
         help='use transfer value or not')
+    parser.add_argument(
+        '--with_attention',
+        type=int,
+        default=1,
+        help='use attention mechanism or not when training seq2seq emotion')
     parser.add_argument(
         '--gpu_frac',
         type=float,

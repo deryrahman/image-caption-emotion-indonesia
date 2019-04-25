@@ -38,7 +38,8 @@ def main(args):
     captions_marked = mark_captions(captions)
     captions_flat = flatten(captions_marked)
     tokenizer = TokenizerWrap(texts=captions_flat, num_words=num_words)
-    tokenizer.num_words = len(tokenizer.index_word) + 1
+    if num_words is None:
+        tokenizer.num_words = len(tokenizer.index_word) + 1
     print('num_words', tokenizer.num_words)
 
     if not os.path.exists(dataset_path + '/cache'):

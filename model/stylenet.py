@@ -1,4 +1,4 @@
-from keras.layers import Input, Dense, Embedding, Concatenate, RepeatVector, Lambda, BatchNormalization
+from keras.layers import Input, Dense, Embedding, Concatenate, RepeatVector, Lambda
 from keras.applications.resnet_v2 import ResNet152V2
 from keras.models import Model
 from keras.optimizers import Adam
@@ -98,7 +98,6 @@ class StyleNet(RichModel):
         def connect_lstm(states, uniform_state, lstm_layers, net):
 
             for i in range(len(lstm_layers)):
-                net = BatchNormalization(axis=-1)(net)
                 net, state_h, state_c = lstm_layers[i](
                     net, initial_state=states)
 
@@ -151,7 +150,6 @@ class StyleNet(RichModel):
 
         # connect full model
         encoder_net = transfer_layer.output
-        encoder_net = BatchNormalization(axis=-1)(encoder_net)
         decoder_net, _, _ = connect_decoder(encoder_net, decoder_input)
         decoder_output = decoder_dense(decoder_net)
         self.model = Model(
@@ -162,7 +160,7 @@ class StyleNet(RichModel):
             inputs=[image_model.input], outputs=[transfer_layer.output])
 
         # connect decoder FactoredLSTM
-        encoder_net = BatchNormalization(axis=-1)(transfer_values_input)
+        encoder_net = transfer_values_input
         decoder_net, _, _ = connect_decoder(encoder_net, decoder_input)
         decoder_output = decoder_dense(decoder_net)
         self.model_decoder = Model(

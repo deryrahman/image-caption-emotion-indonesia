@@ -1,4 +1,4 @@
-from keras.layers import Input, Embedding, LSTM, Dense, RepeatVector, Concatenate, BatchNormalization
+from keras.layers import Input, Embedding, LSTM, Dense, RepeatVector, Concatenate
 from keras.models import Model
 from keras.optimizers import Adam
 from keras.utils.np_utils import np
@@ -128,7 +128,6 @@ class Seq2Seq(RichModel):
         def connect_lstm(states, uniform_state, lstm_layers, net):
 
             for i in range(len(lstm_layers)):
-                net = BatchNormalization(axis=-1)(net)
                 net, state_h, state_c = lstm_layers[i](
                     net, initial_state=states)
 
@@ -190,7 +189,7 @@ class Seq2Seq(RichModel):
             return decoder_net
 
         # connect full model
-        encoder_net = BatchNormalization(axis=-1)(transfer_values_input)
+        encoder_net = transfer_values_input
         encoder_net, state_h, state_c = connect_encoder(encoder_net,
                                                         encoder_input)
         if self.with_attention:
@@ -218,7 +217,7 @@ class Seq2Seq(RichModel):
             inputs=[encoder_input, decoder_input], outputs=[decoder_output])
 
         # connect encoder FactoredLSTM
-        encoder_net = BatchNormalization(axis=-1)(transfer_values_input)
+        encoder_net = transfer_values_input
         encoder_net, state_h, state_c = connect_encoder(encoder_net,
                                                         encoder_input)
         states = [state_h, state_c]

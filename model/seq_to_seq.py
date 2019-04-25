@@ -3,7 +3,7 @@ from keras.models import Model
 from keras.optimizers import Adam
 from keras.utils.np_utils import np
 from loss import sparse_cross_entropy
-from nn import FactoredLSTM, AttentionLayer
+from nn import FactoredLSTM, AttentionDecoder
 from model.base import RichModel
 import tensorflow as tf
 import os
@@ -65,7 +65,8 @@ class Seq2Seq(RichModel):
             trainable=self.trainable_model)
 
         # encoder word embedding
-        encoder_input = Input(shape=(None,), name='seq2seq_encoder_input')
+        encoder_input = Input(
+            shape=(None,), name='seq2seq_encoder_input', dtype='int64')
         encoder_embedding = Embedding(
             input_dim=self.num_words,
             output_dim=self.embedding_size,
@@ -84,18 +85,23 @@ class Seq2Seq(RichModel):
                 return_state=True) for i in range(self.encoder_lstm_layers)
         ]
 
-        # decoder word embedding
-        decoder_input = Input(shape=(None,), name='seq2seq_decoder_input')
+        # decoder input
+        decoder_input = Input(
+            shape=(None,), name='seq2seq_decoder_input', dtype='int64')
+        decoder_input_encoder = Input(
+            shape=(None, self.state_size), name='input_for_att')
         decoder_input_h = Input(
             shape=(self.state_size,), name='seq2seq_decoder_input_h')
         decoder_input_c = Input(
             shape=(self.state_size,), name='seq2seq_decoder_input_c')
+
+        # decoder word embedding
         decoder_embedding = Embedding(
             input_dim=self.num_words,
             output_dim=self.embedding_size,
             name='seq2seq_decoder_embedding')
 
-        # decoder LSTM
+        # decoder LSTM and Attention
         decoder_lstm = [
             LSTM(
                 self.state_size,
@@ -103,11 +109,13 @@ class Seq2Seq(RichModel):
                 return_sequences=True,
                 return_state=True) for i in range(self.decoder_lstm_layers)
         ]
+        decoder_attention = AttentionDecoder(
+            self.state_size,
+            self.num_words,
+            embedding_dim=self.embedding_size,
+            name='seq2seq_attention')
         decoder_dense = Dense(
             self.num_words, activation='linear', name='seq2seq_decoder_output')
-
-        # attention layer
-        attention = AttentionLayer(name='seq2seq_attention')
 
         def connect_lstm(states, uniform_state, lstm_layers, net):
 
@@ -168,14 +176,18 @@ class Seq2Seq(RichModel):
 
             return decoder_net, state_h, state_c
 
+        def connect_decoder_attention(encoder_net, decoder_input):
+            decoder_net = decoder_attention([encoder_net, decoder_input])
+            return decoder_net
+
         # connect full model
         encoder_net, state_h, state_c = connect_encoder(transfer_values_input,
                                                         encoder_input)
-        decoder_net, _, _ = connect_decoder([state_h, state_c], decoder_input)
-
         if self.with_attention:
-            att_net, attn_states = attention([encoder_net, decoder_net])
-            decoder_net = Concatenate(axis=-1)([decoder_net, att_net])
+            decoder_net = connect_decoder_attention(encoder_net, decoder_input)
+        else:
+            states = [state_h, state_c]
+            decoder_net, _, _ = connect_decoder(states, decoder_input)
 
         decoder_output = decoder_dense(decoder_net)
         self.model = Model(
@@ -184,35 +196,46 @@ class Seq2Seq(RichModel):
 
         # connect full model without transfer value
         encoder_net, state_h, state_c = connect_encoder(None, encoder_input)
-        decoder_net, _, _ = connect_decoder([state_h, state_c], decoder_input)
 
         if self.with_attention:
-            att_net, attn_states = attention([encoder_net, decoder_net])
-            decoder_net = Concatenate(axis=-1)([decoder_net, att_net])
+            decoder_net = connect_decoder_attention(encoder_net, decoder_input)
+        else:
+            states = [state_h, state_c]
+            decoder_net, _, _ = connect_decoder(states, decoder_input)
 
         decoder_output = decoder_dense(decoder_net)
         self.model_partial = Model(
             inputs=[encoder_input, decoder_input], outputs=[decoder_output])
 
         # connect encoder FactoredLSTM
-        _, state_h, state_c = connect_encoder(transfer_values_input,
-                                              encoder_input)
+        encoder_net, state_h, state_c = connect_encoder(transfer_values_input,
+                                                        encoder_input)
         states = [state_h, state_c]
         self.model_encoder = Model(
-            inputs=[transfer_values_input, encoder_input], outputs=states)
+            inputs=[transfer_values_input, encoder_input],
+            outputs=[encoder_net] + states)
 
         # connect encoder FactoredLSTM without transfer value
-        _, state_h, state_c = connect_encoder(None, encoder_input)
+        encoder_net, state_h, state_c = connect_encoder(None, encoder_input)
         states = [state_h, state_c]
         self.model_encoder_partial = Model(
-            inputs=[encoder_input], outputs=states)
+            inputs=[encoder_input], outputs=[encoder_net] + states)
 
         # connect decoder LSTM
-        states = [decoder_input_h, decoder_input_c]
-        decoder_net, _, _ = connect_decoder(states, decoder_input)
-        decoder_output = decoder_dense(decoder_net)
-        self.model_decoder = Model(
-            inputs=[decoder_input] + states, outputs=[decoder_output])
+        if self.with_attention:
+            encoder_net = decoder_input_encoder
+            decoder_net = connect_decoder_attention(encoder_net, decoder_input)
+
+            decoder_output = decoder_dense(decoder_net)
+            self.model_decoder = Model(
+                inputs=[decoder_input, encoder_net], outputs=[decoder_output])
+        else:
+            states = [decoder_input_h, decoder_input_c]
+            decoder_net, _, _ = connect_decoder(states, decoder_input)
+
+            decoder_output = decoder_dense(decoder_net)
+            self.model_decoder = Model(
+                inputs=[decoder_input] + states, outputs=[decoder_output])
 
         # Adam optimizer
         optimizer = Adam(
@@ -317,7 +340,9 @@ class Seq2Seq(RichModel):
             e_x = np.exp(x - np.max(x))
             return e_x / e_x.sum(axis=0)
 
-        states = self.model_encoder.predict([[transfer_values], [input_tokens]])
+        encoder_net, state_h, state_c = self.model_encoder.predict(
+            [[transfer_values], [input_tokens]])
+        states = [state_h, state_c]
         shape = (1, max_tokens)
         decoder_input_data = np.zeros(shape=shape, dtype=np.int)
 
@@ -337,7 +362,11 @@ class Seq2Seq(RichModel):
 
                 is_end_token = False
                 decoder_input_data[0, count_tokens] = token_int
-                x_data = [decoder_input_data] + states
+
+                if self.with_attention:
+                    x_data = [decoder_input_data, encoder_net]
+                else:
+                    x_data = [decoder_input_data] + states
 
                 decoder_output = self.model_decoder.predict(x_data)
 

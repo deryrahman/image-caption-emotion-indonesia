@@ -1,6 +1,6 @@
 from .factored_lstm import FactoredLSTM, FactoredLSTMCell
-from .attention import AttentionLayer
+from .attention import AttentionDecoder
 
 FactoredLSTM = FactoredLSTM
 FactoredLSTMCell = FactoredLSTMCell
-AttentionLayer = AttentionLayer
+AttentionDecoder = AttentionDecoder

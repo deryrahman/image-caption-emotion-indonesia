@@ -1,4 +1,5 @@
 # modified version of https://github.com/datalogue/keras-attention/
+# https://github.com/andreyzharkov/keras-monotonic-attention
 import tensorflow as tf
 import keras
 from keras import backend as K

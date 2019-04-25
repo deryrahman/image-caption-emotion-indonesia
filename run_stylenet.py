@@ -6,7 +6,7 @@ from utils.evaluator import bleu_evaluator
 from utils.predictor import generate_caption
 from callbacks import ModelCheckpoint
 from keras.callbacks import TensorBoard, EarlyStopping
-from tensorflow.core.protobuf import rewriter_config_pb2
+# from tensorflow.core.protobuf import rewriter_config_pb2
 from keras import backend as K
 import tensorflow as tf
 import numpy as np
@@ -44,6 +44,7 @@ def main(args):
     batch_size = args.batch_size
     early_stop = args.early_stop
     beam_search = args.beam_search
+    dropout = args.dropout
 
     assert_path_error(dataset_path)
     assert_path_error(dataset_path + '/' + mode)
@@ -57,8 +58,8 @@ def main(args):
 
     K.clear_session()
     config = tf.ConfigProto()
-    off = rewriter_config_pb2.RewriterConfig.OFF
-    config.graph_options.rewrite_options.memory_optimization = off
+    # off = rewriter_config_pb2.RewriterConfig.OFF
+    # config.graph_options.rewrite_options.memory_optimization = off
 
     config.gpu_options.allow_growth = True
     config.gpu_options.per_process_gpu_memory_fraction = gpu_frac
@@ -171,7 +172,8 @@ def main(args):
             learning_rate=learning_rate,
             beta_1=beta_1,
             beta_2=beta_2,
-            epsilon=epsilon)
+            epsilon=epsilon,
+            dropout=dropout)
 
         if load_model == 1:
             try:
@@ -363,7 +365,8 @@ def main(args):
             learning_rate=learning_rate,
             beta_1=beta_1,
             beta_2=beta_2,
-            epsilon=epsilon)
+            epsilon=epsilon,
+            dropout=dropout)
 
         try:
             stylenet.load(path_checkpoint)
@@ -385,7 +388,8 @@ def main(args):
                 learning_rate=learning_rate,
                 beta_1=beta_1,
                 beta_2=beta_2,
-                epsilon=epsilon)
+                epsilon=epsilon,
+                dropout=dropout)
 
             path_checkpoint += '.seq2seq'
             if load_model == 1:
@@ -595,6 +599,11 @@ if __name__ == '__main__':
         type=int,
         default=512,
         help='number of Factored LSTM state units')
+    parser.add_argument(
+        '--dropout',
+        type=float,
+        default=0.5,
+        help='used for dropout rate for all specific layer')
     parser.add_argument(
         '--learning_rate',
         type=float,

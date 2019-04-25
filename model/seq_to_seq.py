@@ -1,4 +1,4 @@
-from keras.layers import Input, Embedding, LSTM, Dense, RepeatVector, Concatenate
+from keras.layers import Input, Embedding, LSTM, Dense, RepeatVector, Concatenate, BatchNormalization
 from keras.models import Model
 from keras.optimizers import Adam
 from keras.utils.np_utils import np
@@ -26,7 +26,8 @@ class Seq2Seq(RichModel):
                  beta_2=0.999,
                  epsilon=1e-08,
                  encoder_lstm_layers=1,
-                 decoder_lstm_layers=1):
+                 decoder_lstm_layers=1,
+                 dropout=0.5):
         self.mode = mode
         self.with_attention = with_attention
         self.injection_mode = injection_mode
@@ -42,6 +43,7 @@ class Seq2Seq(RichModel):
         self.epsilon = epsilon
         self.encoder_lstm_layers = encoder_lstm_layers
         self.decoder_lstm_layers = decoder_lstm_layers
+        self.dropout = dropout
         self.model = None
         self.model_partial = None
         self.model_encoder = None
@@ -82,7 +84,9 @@ class Seq2Seq(RichModel):
                 factored_dim=self.factored_size,
                 name='seq2seq_encoder_factored_lstm_{}'.format(i),
                 return_sequences=True,
-                return_state=True) for i in range(self.encoder_lstm_layers)
+                return_state=True,
+                recurrent_dropout=self.dropout,
+                dropout=self.dropout) for i in range(self.encoder_lstm_layers)
         ]
 
         # decoder input
@@ -107,19 +111,24 @@ class Seq2Seq(RichModel):
                 self.state_size,
                 name='seq2seq_decoder_lstm_{}'.format(i),
                 return_sequences=True,
-                return_state=True) for i in range(self.decoder_lstm_layers)
+                return_state=True,
+                recurrent_dropout=self.dropout,
+                dropout=self.dropout) for i in range(self.decoder_lstm_layers)
         ]
         decoder_attention = AttentionDecoder(
             self.state_size,
             self.num_words,
             embedding_dim=self.embedding_size,
-            name='seq2seq_attention')
+            name='seq2seq_attention',
+            recurrent_dropout=self.dropout,
+            dropout=self.dropout)
         decoder_dense = Dense(
             self.num_words, activation='linear', name='seq2seq_decoder_output')
 
         def connect_lstm(states, uniform_state, lstm_layers, net):
 
             for i in range(len(lstm_layers)):
+                net = BatchNormalization(axis=-1)(net)
                 net, state_h, state_c = lstm_layers[i](
                     net, initial_state=states)
 
@@ -181,7 +190,8 @@ class Seq2Seq(RichModel):
             return decoder_net
 
         # connect full model
-        encoder_net, state_h, state_c = connect_encoder(transfer_values_input,
+        encoder_net = BatchNormalization(axis=-1)(transfer_values_input)
+        encoder_net, state_h, state_c = connect_encoder(encoder_net,
                                                         encoder_input)
         if self.with_attention:
             decoder_net = connect_decoder_attention(encoder_net, decoder_input)
@@ -208,7 +218,8 @@ class Seq2Seq(RichModel):
             inputs=[encoder_input, decoder_input], outputs=[decoder_output])
 
         # connect encoder FactoredLSTM
-        encoder_net, state_h, state_c = connect_encoder(transfer_values_input,
+        encoder_net = BatchNormalization(axis=-1)(transfer_values_input)
+        encoder_net, state_h, state_c = connect_encoder(encoder_net,
                                                         encoder_input)
         states = [state_h, state_c]
         self.model_encoder = Model(

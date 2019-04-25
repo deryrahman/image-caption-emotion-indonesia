@@ -1,4 +1,4 @@
-from keras.layers import Input, Dense, Embedding, Concatenate, RepeatVector, Lambda
+from keras.layers import Input, Dense, Embedding, Concatenate, RepeatVector, Lambda, BatchNormalization
 from keras.applications.resnet_v2 import ResNet152V2
 from keras.models import Model
 from keras.optimizers import Adam
@@ -26,7 +26,8 @@ class StyleNet(RichModel):
                  beta_1=0.9,
                  beta_2=0.999,
                  epsilon=1e-08,
-                 lstm_layers=1):
+                 lstm_layers=1,
+                 dropout=0.5):
         self.injection_mode = injection_mode
         self.trainable_model = trainable_model
         self.mode = mode
@@ -40,6 +41,7 @@ class StyleNet(RichModel):
         self.beta_2 = beta_2
         self.epsilon = epsilon
         self.lstm_layers = lstm_layers
+        self.dropout = dropout
         self.model = None
         self.model_encoder = None
         self.model_decoder = None
@@ -50,6 +52,8 @@ class StyleNet(RichModel):
         # encoder ResNet
         image_model = ResNet152V2(include_top=True, weights='imagenet')
         transfer_layer = image_model.get_layer('avg_pool')
+        for layer in image_model.layers:
+            layer.trainable = False
 
         # image embedding
         transfer_values_input = Input(
@@ -81,7 +85,9 @@ class StyleNet(RichModel):
                 factored_dim=self.factored_size,
                 name='decoder_factored_lstm_{}'.format(i),
                 return_state=True,
-                return_sequences=True) for i in range(self.lstm_layers)
+                return_sequences=True,
+                recurrent_dropout=self.dropout,
+                dropout=self.dropout) for i in range(self.lstm_layers)
         ]
         decoder_dense = Dense(
             self.num_words,
@@ -92,6 +98,7 @@ class StyleNet(RichModel):
         def connect_lstm(states, uniform_state, lstm_layers, net):
 
             for i in range(len(lstm_layers)):
+                net = BatchNormalization(axis=-1)(net)
                 net, state_h, state_c = lstm_layers[i](
                     net, initial_state=states)
 
@@ -144,6 +151,7 @@ class StyleNet(RichModel):
 
         # connect full model
         encoder_net = transfer_layer.output
+        encoder_net = BatchNormalization(axis=-1)(encoder_net)
         decoder_net, _, _ = connect_decoder(encoder_net, decoder_input)
         decoder_output = decoder_dense(decoder_net)
         self.model = Model(
@@ -154,8 +162,8 @@ class StyleNet(RichModel):
             inputs=[image_model.input], outputs=[transfer_layer.output])
 
         # connect decoder FactoredLSTM
-        decoder_net, _, _ = connect_decoder(transfer_values_input,
-                                            decoder_input)
+        encoder_net = BatchNormalization(axis=-1)(transfer_values_input)
+        decoder_net, _, _ = connect_decoder(encoder_net, decoder_input)
         decoder_output = decoder_dense(decoder_net)
         self.model_decoder = Model(
             inputs=[transfer_values_input, decoder_input],

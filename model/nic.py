@@ -1,4 +1,4 @@
-from keras.layers import Input, Dense, LSTM, Embedding, Concatenate, RepeatVector, Lambda
+from keras.layers import Input, Dense, LSTM, Embedding, Concatenate, RepeatVector, Lambda, BatchNormalization
 from keras.models import Model
 from keras.applications.resnet_v2 import ResNet152V2
 from keras.optimizers import Adam
@@ -21,7 +21,8 @@ class NIC(RichModel):
                  beta_1=0.9,
                  beta_2=0.999,
                  epsilon=1e-08,
-                 lstm_layers=1):
+                 lstm_layers=1,
+                 dropout=0.5):
         self.injection_mode = injection_mode
         self.include_transfer_value = include_transfer_value
         self.num_words = num_words
@@ -33,6 +34,7 @@ class NIC(RichModel):
         self.beta_2 = beta_2
         self.epsilon = epsilon
         self.lstm_layers = lstm_layers
+        self.dropout = dropout
         self.model = None
         self.model_encoder = None
         self.model_decoder = None
@@ -67,7 +69,9 @@ class NIC(RichModel):
                 self.state_size,
                 name='decoder_lstm_{}'.format(i),
                 return_state=True,
-                return_sequences=True) for i in range(self.lstm_layers)
+                return_sequences=True,
+                recurrent_dropout=self.dropout,
+                dropout=self.dropout) for i in range(self.lstm_layers)
         ]
         decoder_dense = Dense(
             self.num_words, activation='linear', name='decoder_output')
@@ -75,6 +79,7 @@ class NIC(RichModel):
         def connect_lstm(states, uniform_state, lstm_layers, net):
 
             for i in range(len(lstm_layers)):
+                net = BatchNormalization(axis=-1)(net)
                 net, state_h, state_c = lstm_layers[i](
                     net, initial_state=states)
 
@@ -83,21 +88,21 @@ class NIC(RichModel):
 
             return net, state_h, state_c
 
-        def connect_decoder(encoder_output, decoder_input):
+        def connect_decoder(encoder_net, decoder_input):
 
             decoder_net = decoder_embedding(decoder_input)
 
-            if encoder_output is None:
+            if encoder_net is None:
                 states = None
                 decoder_net, state_h, state_c = connect_lstm(
                     states=states,
                     uniform_state=False,
                     lstm_layers=decoder_lstm,
                     net=decoder_net)
-                decoder_output = decoder_dense(decoder_net)
-                return decoder_output, state_h, state_c
 
-            decoder_transfer = decoder_transfer_map(encoder_output)
+                return decoder_net, state_h, state_c
+
+            decoder_transfer = decoder_transfer_map(encoder_net)
 
             if self.injection_mode == 'init':
                 states = [decoder_transfer, decoder_transfer]
@@ -107,8 +112,7 @@ class NIC(RichModel):
                     lstm_layers=decoder_lstm,
                     net=decoder_net)
 
-                decoder_output = decoder_dense(decoder_net)
-                return decoder_output, state_h, state_c
+                return decoder_net, state_h, state_c
 
             if self.injection_mode == 'pre':
                 states = None
@@ -122,14 +126,15 @@ class NIC(RichModel):
                 # shift output lstm 1 step to the right
                 decoder_net = Lambda(lambda x: x[:, 1:, :])(decoder_net)
 
-                decoder_output = decoder_dense(decoder_net)
-                return decoder_output, state_h, state_c
+                return decoder_net, state_h, state_c
 
             return None, None, None
 
         # connect full model
-        encoder_output = transfer_layer.output
-        decoder_output, _, _ = connect_decoder(encoder_output, decoder_input)
+        encoder_net = transfer_layer.output
+        encoder_net = BatchNormalization(axis=-1)(encoder_net)
+        decoder_net, _, _ = connect_decoder(encoder_net, decoder_input)
+        decoder_output = decoder_dense(decoder_net)
         self.model = Model(
             inputs=[image_model.input, decoder_input], outputs=[decoder_output])
 
@@ -138,14 +143,16 @@ class NIC(RichModel):
             inputs=[image_model.input], outputs=[transfer_layer.output])
 
         # connect decoder LSTM
-        decoder_output, _, _ = connect_decoder(transfer_values_input,
-                                               decoder_input)
+        encoder_net = BatchNormalization(axis=-1)(transfer_values_input)
+        decoder_net, _, _ = connect_decoder(encoder_net, decoder_input)
+        decoder_output = decoder_dense(decoder_net)
         self.model_decoder = Model(
             inputs=[transfer_values_input, decoder_input],
             outputs=[decoder_output])
 
         # connect decoder LSTM without transfer value
-        decoder_output, _, _ = connect_decoder(None, decoder_input)
+        decoder_net, _, _ = connect_decoder(None, decoder_input)
+        decoder_output = decoder_dense(decoder_net)
         self.model_decoder_partial = Model(
             inputs=[decoder_input], outputs=[decoder_output])
 

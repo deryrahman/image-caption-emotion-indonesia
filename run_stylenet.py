@@ -103,7 +103,7 @@ def main(args):
     filenames_test, captions_test = test
 
     # # for local testing only
-    # filenames_train, captions_train = filenames_train[:50], captions_train[:50]
+    # filenames_train, captions_train = filenames_train[:10], captions_train[:10]
     # filenames_val, captions_val = filenames_val[:5], captions_val[:5]
     # filenames_test, captions_test = filenames_test[:5], captions_test[:5]
 
@@ -185,7 +185,7 @@ def main(args):
         log_dir=log_dir, histogram_freq=0, write_graph=False)
 
     callbacks = [
-        callback_tensorboard, callback_checkpoint, callback_earystoping
+        callback_tensorboard, callback_earystoping, callback_checkpoint
     ]
 
     if load_model == 1:

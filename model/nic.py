@@ -49,10 +49,7 @@ class NIC(RichModel):
         transfer_values_input = Input(
             shape=(self.transfer_values_size,), name='transfer_values_input')
         decoder_transfer_map = Dense(
-            self.embedding_size,
-            activation='tanh',
-            name='decoder_transfer_map',
-            trainable=self.trainable_model)
+            self.embedding_size, activation='tanh', name='decoder_transfer_map')
         decoder_transfer_map_transform = RepeatVector(
             1, name='decoder_transfer_map_transform')
         concatenate = Concatenate(axis=1, name='decoder_concatenate')
@@ -62,8 +59,7 @@ class NIC(RichModel):
         decoder_embedding = Embedding(
             input_dim=self.num_words,
             output_dim=self.embedding_size,
-            name='decoder_embedding',
-            trainable=self.trainable_model)
+            name='decoder_embedding')
 
         # decoder Factored LSTM
         decoder_lstm = [
@@ -75,10 +71,7 @@ class NIC(RichModel):
                 dropout=self.dropout) for i in range(self.lstm_layers)
         ]
         decoder_dense = Dense(
-            self.num_words,
-            activation='linear',
-            name='decoder_dense',
-            trainable=self.trainable_model)
+            self.num_words, activation='linear', name='decoder_dense')
         decoder_step = Lambda(lambda x: x[:, 1:, :], name='decoder_step')
 
         def connect_lstm(lstm_layers, net):

@@ -186,7 +186,7 @@ def main(args):
             filepath=path_checkpoint,
             monitor='val_loss',
             verbose=1,
-            save_best_only=True)
+            save_best_only=False)
 
         callback_tensorboard = TensorBoard(
             log_dir=log_dir, histogram_freq=0, write_graph=False)
@@ -221,7 +221,7 @@ def main(args):
             _, output_text = generate_caption(
                 image_path=dataset_path + '/img/' + filename,
                 tokenizer=tokenizer,
-                stylenet=stylenet,
+                rich_model=stylenet,
                 k=beam_search,
                 mode='factual')
             predictions.append(output_text)
@@ -406,14 +406,14 @@ def main(args):
                 filepath=path_checkpoint,
                 monitor='val_loss',
                 verbose=1,
-                save_best_only=True)
+                save_best_only=False)
         elif emotion_training_mode == 'stylenet':
             callback_checkpoint = ModelCheckpoint(
                 stylenet,
                 filepath=path_checkpoint,
                 monitor='val_loss',
                 verbose=1,
-                save_best_only=True)
+                save_best_only=False)
 
         callback_tensorboard = TensorBoard(
             log_dir=log_dir, histogram_freq=0, write_graph=False)

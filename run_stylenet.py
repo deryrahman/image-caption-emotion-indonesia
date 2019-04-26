@@ -43,9 +43,9 @@ def main(args):
 
     result_path = checkpoints_path + '/stylenet/result'
 
-    # for local test only
-    epoch_num = 1
-    batch_size = 2
+    # # for local test only
+    # epoch_num = 1
+    # batch_size = 2
 
     assert_path_error(dataset_path)
     assert_path_error(dataset_path + '/' + mode)
@@ -102,10 +102,10 @@ def main(args):
     filenames_val, captions_val = val
     filenames_test, captions_test = test
 
-    # for local testing only
-    filenames_train, captions_train = filenames_train[:50], captions_train[:50]
-    filenames_val, captions_val = filenames_val[:5], captions_val[:5]
-    filenames_test, captions_test = filenames_test[:5], captions_test[:5]
+    # # for local testing only
+    # filenames_train, captions_train = filenames_train[:50], captions_train[:50]
+    # filenames_val, captions_val = filenames_val[:5], captions_val[:5]
+    # filenames_test, captions_test = filenames_test[:5], captions_test[:5]
 
     num_captions_train = [len(captions) for captions in captions_train]
     total_num_captions_train = np.sum(num_captions_train)
@@ -176,12 +176,16 @@ def main(args):
         verbose=1,
         save_best_only=True)
     callback_earystoping = EarlyStopping(
-        monitor='val_loss', verbose=1, patience=10, min_delta=0.1)
+        monitor='val_loss',
+        verbose=1,
+        patience=10,
+        min_delta=0.1,
+        restore_best_weights=True)
     callback_tensorboard = TensorBoard(
         log_dir=log_dir, histogram_freq=0, write_graph=False)
 
     callbacks = [
-        callback_checkpoint, callback_earystoping, callback_tensorboard
+        callback_tensorboard, callback_checkpoint, callback_earystoping
     ]
 
     if load_model == 1:
@@ -198,6 +202,8 @@ def main(args):
         validation_data=generator_val,
         validation_steps=val_steps,
         callbacks=callbacks)
+
+    stylenet.save(path_checkpoint, True)
 
     scores = stylenet.model.evaluate_generator(
         generator=generator_test, steps=test_steps, verbose=1)

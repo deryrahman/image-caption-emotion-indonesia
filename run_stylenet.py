@@ -197,7 +197,6 @@ def main(args):
                 monitor='val_loss',
                 verbose=1,
                 patience=early_stop,
-                restore_best_weights=True,
                 min_delta=0.15)
             callbacks = [
                 callback_checkpoint, callback_earystoping, callback_tensorboard
@@ -424,7 +423,6 @@ def main(args):
                 monitor='val_loss',
                 verbose=1,
                 patience=early_stop,
-                restore_best_weights=True,
                 min_delta=0.15)
             callbacks += [callback_earystoping]
 

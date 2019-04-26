@@ -1,6 +1,6 @@
 from keras import backend as K, regularizers, initializers
 from keras.utils.np_utils import np
-from keras.layers.recurrent import LSTMCell, LSTM
+from keras.layers.recurrent import LSTMCell, LSTM, _generate_dropout_mask
 
 
 class FactoredLSTMCell(LSTMCell):
@@ -26,13 +26,6 @@ class FactoredLSTMCell(LSTMCell):
                     [np.identity(shape[0])] * (shape[1] // shape[0]), axis=1)
 
             self.recurrent_initializer = recurrent_identity
-
-        def bias_initializer(_, *args, **kwargs):
-            return K.concatenate([
-                self.bias_initializer((self.units,), *args, **kwargs),
-                initializers.Ones()((self.units,), *args, **kwargs),
-                self.bias_initializer((self.units * 2,), *args, **kwargs),
-            ])
 
         self.kernel_S = self.add_weight(
             shape=(self.factored_dim, self.factored_dim * 4),
@@ -61,28 +54,72 @@ class FactoredLSTMCell(LSTMCell):
             regularizer=self.recurrent_regularizer,
             constraint=self.recurrent_constraint,
             trainable=self.trainable_model)
-        self.bias = self.add_weight(
-            shape=(self.units * 4,),
-            name='bias',
-            initializer=bias_initializer,
-            regularizer=self.bias_regularizer,
-            constraint=self.bias_constraint,
-            trainable=self.trainable_model)
+
+        if self.use_bias:
+            if self.unit_forget_bias:
+
+                def bias_initializer(_, *args, **kwargs):
+                    return K.concatenate([
+                        self.bias_initializer((self.units,), *args, **kwargs),
+                        initializers.Ones()((self.units,), *args, **kwargs),
+                        self.bias_initializer((self.units * 2,), *args,
+                                              **kwargs),
+                    ])
+            else:
+                bias_initializer = self.bias_initializer
+            self.bias = self.add_weight(
+                shape=(self.units * 4,),
+                name='bias',
+                initializer=bias_initializer,
+                regularizer=self.bias_regularizer,
+                constraint=self.bias_constraint,
+                trainable=self.trainable_model)
+        else:
+            self.bias = None
+
         self.built = True
 
     def call(self, inputs, states, training=None):
+        if 0 < self.dropout < 1 and self._dropout_mask is None:
+            self._dropout_mask = _generate_dropout_mask(
+                K.ones_like(inputs), self.dropout, training=training, count=4)
+        if (0 < self.recurrent_dropout < 1 and
+                self._recurrent_dropout_mask is None):
+            self._recurrent_dropout_mask = _generate_dropout_mask(
+                K.ones_like(states[0]),
+                self.recurrent_dropout,
+                training=training,
+                count=4)
+
+        # dropout matrices for input units
+        dp_mask = self._dropout_mask
+        # dropout matrices for recurrent units
+        rec_dp_mask = self._recurrent_dropout_mask
+
         h_tm1 = states[0]  # previous memory state
         c_tm1 = states[1]  # previous cell state
 
-        inputs_i = inputs
-        inputs_f = inputs
-        inputs_c = inputs
-        inputs_o = inputs
+        if 0 < self.dropout < 1.:
+            inputs_i = inputs * dp_mask[0]
+            inputs_f = inputs * dp_mask[1]
+            inputs_c = inputs * dp_mask[2]
+            inputs_o = inputs * dp_mask[3]
+        else:
+            inputs_i = inputs
+            inputs_f = inputs
+            inputs_c = inputs
+            inputs_o = inputs
 
-        h_tm1_i = h_tm1
-        h_tm1_f = h_tm1
-        h_tm1_c = h_tm1
-        h_tm1_o = h_tm1
+        if 0 < self.recurrent_dropout < 1.:
+            h_tm1_i = h_tm1 * rec_dp_mask[0]
+            h_tm1_f = h_tm1 * rec_dp_mask[1]
+            h_tm1_c = h_tm1 * rec_dp_mask[2]
+            h_tm1_o = h_tm1 * rec_dp_mask[3]
+        else:
+            h_tm1_i = h_tm1
+            h_tm1_f = h_tm1
+            h_tm1_c = h_tm1
+            h_tm1_o = h_tm1
 
         V = self.kernel_V
         x_i = K.dot(inputs_i, V[:, :self.factored_dim])
@@ -102,10 +139,11 @@ class FactoredLSTMCell(LSTMCell):
         x_c = K.dot(x_c, U[:, self.units * 2:self.units * 3])
         x_o = K.dot(x_o, U[:, self.units * 3:])
 
-        x_i = K.bias_add(x_i, self.bias[:self.units])
-        x_f = K.bias_add(x_f, self.bias[self.units:self.units * 2])
-        x_c = K.bias_add(x_c, self.bias[self.units * 2:self.units * 3])
-        x_o = K.bias_add(x_o, self.bias[self.units * 3:])
+        if self.use_bias:
+            x_i = K.bias_add(x_i, self.bias[:self.units])
+            x_f = K.bias_add(x_f, self.bias[self.units:self.units * 2])
+            x_c = K.bias_add(x_c, self.bias[self.units * 2:self.units * 3])
+            x_o = K.bias_add(x_o, self.bias[self.units * 3:])
 
         W_h = self.recurrent_kernel
         h_i = K.dot(h_tm1_i, W_h[:, :self.units])
@@ -119,7 +157,11 @@ class FactoredLSTMCell(LSTMCell):
         c = f * c_tm1 + i * c
         o = self.recurrent_activation(x_o + h_o)
 
-        h = o * c
+        h = o * self.activation(c)
+
+        if 0 < self.dropout + self.recurrent_dropout:
+            if training is None:
+                h._uses_learning_phase = True
 
         return h, [h, c]
 

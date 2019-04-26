@@ -5,7 +5,7 @@ from keras import backend as K
 
 def generate_caption(image_path,
                      tokenizer,
-                     stylenet,
+                     rich_model,
                      k=3,
                      mode='factual',
                      seq2seq=None,
@@ -14,11 +14,11 @@ def generate_caption(image_path,
     token_start = tokenizer.word_index[mark_start.strip()]
     token_end = tokenizer.word_index[mark_end.strip()]
 
-    img_size = K.int_shape(stylenet.model_encoder.input)[1:3]
+    img_size = K.int_shape(rich_model.model_encoder.input)[1:3]
 
     image = load_image(image_path, size=img_size)
 
-    output_tokens, transfer_values = stylenet.predict(
+    output_tokens, transfer_values = rich_model.predict(
         image=image,
         token_start=token_start,
         token_end=token_end,

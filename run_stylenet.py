@@ -485,7 +485,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--beam_search',
         type=int,
-        default=10,
+        default=3,
         help='beam search for generating sequence')
     parser.add_argument(
         '--load_model',

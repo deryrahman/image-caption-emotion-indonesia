@@ -16,7 +16,6 @@ class StyleNet(RichModel):
     def __init__(self,
                  mode='factual',
                  trainable_model=True,
-                 injection_mode='init',
                  num_words=10000,
                  transfer_values_size=2048,
                  state_size=512,
@@ -27,8 +26,7 @@ class StyleNet(RichModel):
                  beta_2=0.999,
                  epsilon=1e-08,
                  lstm_layers=1,
-                 dropout=0.5):
-        self.injection_mode = injection_mode
+                 dropout=0.0):
         self.trainable_model = trainable_model
         self.mode = mode
         self.num_words = num_words
@@ -58,15 +56,14 @@ class StyleNet(RichModel):
         # image embedding
         transfer_values_input = Input(
             shape=(self.transfer_values_size,), name='transfer_values_input')
-        decoder_units = {
-            'init': self.state_size,
-            'pre': self.embedding_size
-        }.get(self.injection_mode, self.state_size)
         decoder_transfer_map = Dense(
-            decoder_units,
+            self.embedding_size,
             activation='tanh',
             name='decoder_transfer_map',
             trainable=self.trainable_model)
+        decoder_transfer_map_transform = RepeatVector(
+            1, name='decoder_transfer_map_transform')
+        concatenate = Concatenate(axis=1, name='decoder_concatenate')
 
         # word embedding
         decoder_input = Input(shape=(None,), name='decoder_input')
@@ -84,7 +81,6 @@ class StyleNet(RichModel):
                 trainable_model=self.trainable_model,
                 factored_dim=self.factored_size,
                 name='decoder_factored_lstm_{}'.format(i),
-                return_state=True,
                 return_sequences=True,
                 recurrent_dropout=self.dropout,
                 dropout=self.dropout) for i in range(self.lstm_layers)
@@ -92,83 +88,49 @@ class StyleNet(RichModel):
         decoder_dense = Dense(
             self.num_words,
             activation='linear',
-            name='decoder_output',
+            name='decoder_dense',
             trainable=self.trainable_model)
+        decoder_step = Lambda(lambda x: x[:, 1:, :], name='decoder_step')
 
-        def connect_lstm(states, uniform_state, lstm_layers, net):
-
+        def connect_lstm(lstm_layers, net):
             for i in range(len(lstm_layers)):
-                net, state_h, state_c = lstm_layers[i](
-                    net, initial_state=states)
+                net = lstm_layers[i](net)
+            return net
 
-                if not uniform_state:
-                    states = [state_h, state_c]
-
-            return net, state_h, state_c
-
-        def connect_decoder(encoder_net, decoder_input):
+        def connect_decoder(encoder_output, decoder_input):
 
             decoder_net = decoder_embedding(decoder_input)
 
-            if encoder_net is None:
-                states = None
-                decoder_net, state_h, state_c = connect_lstm(
-                    states=states,
-                    uniform_state=True,
-                    lstm_layers=decoder_factored_lstm,
-                    net=decoder_net)
+            if encoder_output is None:
+                decoder_net = connect_lstm(
+                    lstm_layers=decoder_factored_lstm, net=decoder_net)
+                return decoder_net
 
-                return decoder_net, state_h, state_c
+            decoder_transfer = decoder_transfer_map(encoder_output)
+            decoder_transfer = decoder_transfer_map_transform(decoder_transfer)
+            decoder_net = concatenate([decoder_transfer, decoder_net])
+            decoder_net = connect_lstm(
+                lstm_layers=decoder_factored_lstm, net=decoder_net)
+            decoder_net = decoder_step(decoder_net)
 
-            decoder_transfer = decoder_transfer_map(encoder_net)
-
-            if self.injection_mode == 'init':
-                states = [decoder_transfer, decoder_transfer]
-                decoder_net, state_h, state_c = connect_lstm(
-                    states=states,
-                    uniform_state=True,
-                    lstm_layers=decoder_factored_lstm,
-                    net=decoder_net)
-
-                return decoder_net, state_h, state_c
-
-            if self.injection_mode == 'pre':
-                states = None
-                decoder_init = RepeatVector(1)(decoder_transfer)
-                decoder_net = Concatenate(axis=1)([decoder_init, decoder_net])
-                decoder_net, state_h, state_c = connect_lstm(
-                    states=states,
-                    uniform_state=True,
-                    lstm_layers=decoder_factored_lstm,
-                    net=decoder_net)
-                # shift output lstm 1 step to the right
-                decoder_net = Lambda(lambda x: x[:, 1:, :])(decoder_net)
-
-                return decoder_net, state_h, state_c
-
-            return None, None, None
-
-        # connect full model
-        encoder_net = transfer_layer.output
-        decoder_net, _, _ = connect_decoder(encoder_net, decoder_input)
-        decoder_output = decoder_dense(decoder_net)
-        self.model = Model(
-            inputs=[image_model.input, decoder_input], outputs=[decoder_output])
+            return decoder_net
 
         # connect encoder ResNet
         self.model_encoder = Model(
             inputs=[image_model.input], outputs=[transfer_layer.output])
 
         # connect decoder FactoredLSTM
-        encoder_net = transfer_values_input
-        decoder_net, _, _ = connect_decoder(encoder_net, decoder_input)
+        decoder_net = decoder_input
+        encoder_output = transfer_values_input
+        decoder_net = connect_decoder(encoder_output, decoder_net)
         decoder_output = decoder_dense(decoder_net)
         self.model_decoder = Model(
             inputs=[transfer_values_input, decoder_input],
             outputs=[decoder_output])
 
         # connect decoder FactoredLSTM without transfer value
-        decoder_net, _, _ = connect_decoder(None, decoder_input)
+        decoder_net = decoder_input
+        decoder_net = connect_decoder(None, decoder_net)
         decoder_output = decoder_dense(decoder_net)
         self.model_decoder_partial = Model(
             inputs=[decoder_input], outputs=[decoder_output])
@@ -180,16 +142,19 @@ class StyleNet(RichModel):
             beta_2=self.beta_2,
             epsilon=self.epsilon)
 
-        # compile model
+        # compile model decoder
         decoder_target = tf.placeholder(dtype='int32', shape=(None, None))
         self.model_decoder.compile(
             optimizer=optimizer,
             loss=sparse_cross_entropy,
             target_tensors=[decoder_target])
+
         self.model_decoder_partial.compile(
             optimizer=optimizer,
             loss=sparse_cross_entropy,
             target_tensors=[decoder_target])
+
+        self.model = self.model_decoder
         # plot_model(self.model, to_file='stylenet.png', show_shapes=True)
 
     def predict(self, image, token_start, token_end, k=3, max_tokens=30):
@@ -205,42 +170,24 @@ class StyleNet(RichModel):
         decoder_input_data = np.zeros(shape=shape, dtype=np.int)
 
         token_int = token_start
-        outputs_tokens = [(0, [token_int])]
+        output_tokens = [token_int]
         count_tokens = 0
 
-        while count_tokens < max_tokens:
+        while token_int != token_end and count_tokens < max_tokens:
 
-            tmp = []
-            is_end_token = True
-            for output_tokens in outputs_tokens:
-                token_int = output_tokens[1][-1]
-                if token_int == token_end:
-                    tmp.append(output_tokens)
-                    continue
+            decoder_input_data[0, count_tokens] = token_int
+            x_data = [transfer_values, decoder_input_data]
 
-                is_end_token = False
-                decoder_input_data[0, count_tokens] = token_int
-                x_data = [transfer_values, decoder_input_data]
+            decoder_output = self.model_decoder.predict(x_data)
 
-                decoder_output = self.model_decoder.predict(x_data)
+            tokens_pred = decoder_output[0, count_tokens, :]
+            token_int = np.argmax(tokens_pred)
 
-                tokens_pred = decoder_output[0, count_tokens, :]
-                tokens_pred = softmax(tokens_pred)
-                tokens_int = tokens_pred.argsort()[-k:][::-1]
-
-                for token_int in tokens_int:
-                    score = output_tokens[0] + tokens_pred[token_int]
-                    tokens = output_tokens[1] + [token_int]
-                    tmp.append((score, tokens))
-
-            if is_end_token:
-                break
-
-            outputs_tokens = sorted(tmp, key=lambda t: t[0])[-k:]
+            output_tokens.append(token_int)
 
             count_tokens += 1
 
-        return np.array(outputs_tokens[0][1]), np.array(transfer_values[0])
+        return np.array(output_tokens), np.array(transfer_values[0])
 
     def save(self, path, overwrite):
         """Rewrite save model, only save weight from decoder

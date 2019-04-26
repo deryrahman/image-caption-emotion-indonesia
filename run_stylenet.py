@@ -461,7 +461,7 @@ def main(args):
                 _, output_text = generate_caption(
                     image_path=dataset_path + '/img/' + filename,
                     tokenizer=tokenizer,
-                    stylenet=stylenet,
+                    rich_model=stylenet,
                     mode=mode,
                     k=beam_search,
                     seq2seq=seq2seq)
@@ -499,7 +499,7 @@ def main(args):
                 _, output_text = generate_caption(
                     image_path=dataset_path + '/img/' + filename,
                     tokenizer=tokenizer,
-                    stylenet=stylenet,
+                    rich_model=stylenet,
                     k=beam_search,
                     mode=mode)
                 predictions.append(output_text)

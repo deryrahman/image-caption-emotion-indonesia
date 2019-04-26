@@ -1,4 +1,4 @@
-from keras.layers import Input, Dense, LSTM, Embedding, Concatenate, RepeatVector, Lambda, BatchNormalization
+from keras.layers import Input, Dense, LSTM, Embedding, Concatenate, RepeatVector, Lambda
 from keras.models import Model
 from keras.applications.resnet_v2 import ResNet152V2
 from keras.optimizers import Adam
@@ -11,8 +11,6 @@ import tensorflow as tf
 class NIC(RichModel):
 
     def __init__(self,
-                 include_transfer_value=False,
-                 injection_mode='init',
                  num_words=10000,
                  transfer_values_size=2048,
                  state_size=512,
@@ -23,8 +21,6 @@ class NIC(RichModel):
                  epsilon=1e-08,
                  lstm_layers=1,
                  dropout=0.5):
-        self.injection_mode = injection_mode
-        self.include_transfer_value = include_transfer_value
         self.num_words = num_words
         self.transfer_values_size = transfer_values_size
         self.state_size = state_size
@@ -45,113 +41,84 @@ class NIC(RichModel):
         # encoder ResNet
         image_model = ResNet152V2(include_top=True, weights='imagenet')
         transfer_layer = image_model.get_layer('avg_pool')
+        for layer in image_model.layers:
+            layer.trainable = False
 
         # image embedding
         transfer_values_input = Input(
             shape=(self.transfer_values_size,), name='transfer_values_input')
-        decoder_units = {
-            'init': self.state_size,
-            'pre': self.embedding_size
-        }.get(self.injection_mode, self.state_size)
         decoder_transfer_map = Dense(
-            decoder_units, activation='tanh', name='decoder_transfer_map')
+            self.embedding_size,
+            activation='tanh',
+            name='decoder_transfer_map',
+            trainable=self.trainable_model)
+        decoder_transfer_map_transform = RepeatVector(
+            1, name='decoder_transfer_map_transform')
+        concatenate = Concatenate(axis=1, name='decoder_concatenate')
 
         # word embedding
         decoder_input = Input(shape=(None,), name='decoder_input')
         decoder_embedding = Embedding(
             input_dim=self.num_words,
             output_dim=self.embedding_size,
-            name='decoder_embedding')
+            name='decoder_embedding',
+            trainable=self.trainable_model)
 
         # decoder Factored LSTM
         decoder_lstm = [
             LSTM(
                 self.state_size,
                 name='decoder_lstm_{}'.format(i),
-                return_state=True,
                 return_sequences=True,
                 recurrent_dropout=self.dropout,
                 dropout=self.dropout) for i in range(self.lstm_layers)
         ]
         decoder_dense = Dense(
-            self.num_words, activation='linear', name='decoder_output')
+            self.num_words,
+            activation='linear',
+            name='decoder_dense',
+            trainable=self.trainable_model)
+        decoder_step = Lambda(lambda x: x[:, 1:, :], name='decoder_step')
 
-        def connect_lstm(states, uniform_state, lstm_layers, net):
-
+        def connect_lstm(lstm_layers, net):
             for i in range(len(lstm_layers)):
-                net = BatchNormalization(axis=-1)(net)
-                net, state_h, state_c = lstm_layers[i](
-                    net, initial_state=states)
+                net = lstm_layers[i](net)
+            return net
 
-                if not uniform_state:
-                    states = [state_h, state_c]
-
-            return net, state_h, state_c
-
-        def connect_decoder(encoder_net, decoder_input):
+        def connect_decoder(encoder_output, decoder_input):
 
             decoder_net = decoder_embedding(decoder_input)
 
-            if encoder_net is None:
-                states = None
-                decoder_net, state_h, state_c = connect_lstm(
-                    states=states,
-                    uniform_state=False,
-                    lstm_layers=decoder_lstm,
-                    net=decoder_net)
+            if encoder_output is None:
+                decoder_net = connect_lstm(
+                    lstm_layers=decoder_lstm, net=decoder_net)
+                return decoder_net
 
-                return decoder_net, state_h, state_c
+            decoder_transfer = decoder_transfer_map(encoder_output)
+            decoder_transfer = decoder_transfer_map_transform(decoder_transfer)
+            decoder_net = concatenate([decoder_transfer, decoder_net])
+            decoder_net = connect_lstm(
+                lstm_layers=decoder_lstm, net=decoder_net)
+            decoder_net = decoder_step(decoder_net)
 
-            decoder_transfer = decoder_transfer_map(encoder_net)
-
-            if self.injection_mode == 'init':
-                states = [decoder_transfer, decoder_transfer]
-                decoder_net, state_h, state_c = connect_lstm(
-                    states=states,
-                    uniform_state=True,
-                    lstm_layers=decoder_lstm,
-                    net=decoder_net)
-
-                return decoder_net, state_h, state_c
-
-            if self.injection_mode == 'pre':
-                states = None
-                decoder_init = RepeatVector(1)(decoder_transfer)
-                decoder_net = Concatenate(axis=1)([decoder_init, decoder_net])
-                decoder_net, state_h, state_c = connect_lstm(
-                    states=states,
-                    uniform_state=False,
-                    lstm_layers=decoder_lstm,
-                    net=decoder_net)
-                # shift output lstm 1 step to the right
-                decoder_net = Lambda(lambda x: x[:, 1:, :])(decoder_net)
-
-                return decoder_net, state_h, state_c
-
-            return None, None, None
-
-        # connect full model
-        encoder_net = transfer_layer.output
-        encoder_net = BatchNormalization(axis=-1)(encoder_net)
-        decoder_net, _, _ = connect_decoder(encoder_net, decoder_input)
-        decoder_output = decoder_dense(decoder_net)
-        self.model = Model(
-            inputs=[image_model.input, decoder_input], outputs=[decoder_output])
+            return decoder_net
 
         # connect encoder ResNet
         self.model_encoder = Model(
             inputs=[image_model.input], outputs=[transfer_layer.output])
 
         # connect decoder LSTM
-        encoder_net = BatchNormalization(axis=-1)(transfer_values_input)
-        decoder_net, _, _ = connect_decoder(encoder_net, decoder_input)
+        decoder_net = decoder_input
+        encoder_output = transfer_values_input
+        decoder_net = connect_decoder(encoder_output, decoder_net)
         decoder_output = decoder_dense(decoder_net)
         self.model_decoder = Model(
             inputs=[transfer_values_input, decoder_input],
             outputs=[decoder_output])
 
         # connect decoder LSTM without transfer value
-        decoder_net, _, _ = connect_decoder(None, decoder_input)
+        decoder_net = decoder_input
+        decoder_net = connect_decoder(None, decoder_net)
         decoder_output = decoder_dense(decoder_net)
         self.model_decoder_partial = Model(
             inputs=[decoder_input], outputs=[decoder_output])
@@ -163,16 +130,19 @@ class NIC(RichModel):
             beta_2=self.beta_2,
             epsilon=self.epsilon)
 
-        # compile model
+        # compile model decoder
         decoder_target = tf.placeholder(dtype='int32', shape=(None, None))
         self.model_decoder.compile(
             optimizer=optimizer,
             loss=sparse_cross_entropy,
             target_tensors=[decoder_target])
+
         self.model_decoder_partial.compile(
             optimizer=optimizer,
             loss=sparse_cross_entropy,
             target_tensors=[decoder_target])
+
+        self.model = self.model_decoder
         # plot_model(self.model, to_file='nic.png', show_shapes=True)
 
     def save(self, path, overwrite):

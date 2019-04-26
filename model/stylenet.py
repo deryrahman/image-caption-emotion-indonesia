@@ -64,8 +64,11 @@ class StyleNet(RichModel):
             name='decoder_transfer_map',
             trainable=self.trainable_model)
         decoder_transfer_map_transform = RepeatVector(
-            1, name='decoder_transfer_map_transform')
-        concatenate = Concatenate(axis=1, name='decoder_concatenate')
+            1,
+            name='decoder_transfer_map_transform',
+            trainable=self.trainable_model)
+        concatenate = Concatenate(
+            axis=1, name='decoder_concatenate', trainable=self.trainable_model)
 
         # word embedding
         decoder_input = Input(shape=(None,), name='decoder_input')
@@ -92,7 +95,10 @@ class StyleNet(RichModel):
             activation='linear',
             name='decoder_output',
             trainable=self.trainable_model)
-        decoder_step = Lambda(lambda x: x[:, 1:, :], name='decoder_step')
+        decoder_step = Lambda(
+            lambda x: x[:, 1:, :],
+            name='decoder_step',
+            trainable=self.trainable_model)
 
         def connect_lstm(lstm_layers, net):
             for i in range(len(lstm_layers)):

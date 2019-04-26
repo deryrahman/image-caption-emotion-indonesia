@@ -58,8 +58,13 @@ class Seq2Seq(RichModel):
             name='seq2seq_encoder_transfer_map',
             trainable=self.trainable_model)
         encoder_transfer_map_transform = RepeatVector(
-            1, name='seq2seq_encoder_transfer_map_transform')
-        concatenate = Concatenate(axis=1, name='seq2seq_encoder_concatenate')
+            1,
+            name='seq2seq_encoder_transfer_map_transform',
+            trainable=self.trainable_model)
+        concatenate = Concatenate(
+            axis=1,
+            name='seq2seq_encoder_concatenate',
+            trainable=self.trainable_model)
 
         # word embedding
         encoder_input = Input(shape=(None,), name='seq2seq_encoder_input')
@@ -83,7 +88,9 @@ class Seq2Seq(RichModel):
                 dropout=self.dropout) for i in range(self.encoder_lstm_layers)
         ]
         encoder_step = Lambda(
-            lambda x: x[:, 1:, :], name='seq2seq_encoder_step')
+            lambda x: x[:, 1:, :],
+            name='seq2seq_encoder_step',
+            trainable=self.trainable_model)
 
         # decoder input
         decoder_input = Input(
@@ -275,7 +282,6 @@ class Seq2Seq(RichModel):
         Arguments:
             stylenet {architecture} -- stylenet instance
         """
-        assert self.injection_mode == stylenet.injection_mode
         assert self.transfer_values_size == stylenet.transfer_values_size
         assert self.encoder_lstm_layers == stylenet.lstm_layers
         assert self.state_size == stylenet.state_size

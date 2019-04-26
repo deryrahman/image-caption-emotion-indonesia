@@ -163,6 +163,7 @@ def main(args):
 
         stylenet = StyleNet(
             injection_mode=injection_mode,
+            with_transfer_value=with_transfer_value == 1,
             num_words=num_words,
             trainable_model=True,
             mode=mode,
@@ -296,19 +297,19 @@ def main(args):
                 transfer_values=transfer_values_train,
                 tokens_encoder_input=tokens_encoder_input_train,
                 tokens_decoder_input=tokens_decoder_input_train,
-                with_transfer_values=with_transfer_value == 1)
+                with_transfer_values=True)
             generator_val = seq2seq_batch_generator(
                 batch_size=batch_size,
                 transfer_values=transfer_values_val,
                 tokens_encoder_input=tokens_encoder_input_val,
                 tokens_decoder_input=tokens_decoder_input_val,
-                with_transfer_values=with_transfer_value == 1)
+                with_transfer_values=True)
             generator_test = seq2seq_batch_generator(
                 batch_size=batch_size,
                 transfer_values=transfer_values_test,
                 tokens_encoder_input=tokens_encoder_input_test,
                 tokens_decoder_input=tokens_decoder_input_test,
-                with_transfer_values=with_transfer_value == 1)
+                with_transfer_values=True)
 
         elif emotion_training_mode == 'stylenet':
             generator_train = stylenet_batch_generator(
@@ -357,6 +358,7 @@ def main(args):
 
         stylenet = StyleNet(
             injection_mode=injection_mode,
+            with_transfer_value=with_transfer_value == 1,
             num_words=num_words,
             trainable_model=False,
             mode=mode,
@@ -432,30 +434,17 @@ def main(args):
             callbacks += [callback_earystoping]
 
         if emotion_training_mode == 'seq2seq':
-            if with_transfer_value == 1:
-                seq2seq.model.fit_generator(
-                    generator=generator_train,
-                    steps_per_epoch=train_steps,
-                    epochs=epoch_num,
-                    validation_data=generator_val,
-                    validation_steps=val_steps,
-                    callbacks=callbacks)
+            seq2seq.model.fit_generator(
+                generator=generator_train,
+                steps_per_epoch=train_steps,
+                epochs=epoch_num,
+                validation_data=generator_val,
+                validation_steps=val_steps,
+                callbacks=callbacks)
 
-                scores = seq2seq.model.evaluate_generator(
-                    generator=generator_test, steps=test_steps, verbose=1)
-                print('test loss', scores)
-            else:
-                seq2seq.model_partial.fit_generator(
-                    generator=generator_train,
-                    steps_per_epoch=train_steps,
-                    epochs=epoch_num,
-                    validation_data=generator_val,
-                    validation_steps=val_steps,
-                    callbacks=callbacks)
-
-                scores = seq2seq.model_partial.evaluate_generator(
-                    generator=generator_test, steps=test_steps, verbose=1)
-                print('test loss', scores)
+            scores = seq2seq.model.evaluate_generator(
+                generator=generator_test, steps=test_steps, verbose=1)
+            print('test loss', scores)
 
             references = []
             predictions = []
@@ -472,28 +461,16 @@ def main(args):
             print(bleu_evaluator(references, predictions))
 
         elif emotion_training_mode == 'stylenet':
-            if with_transfer_value == 1:
-                stylenet.model_decoder.fit_generator(
-                    generator=generator_train,
-                    steps_per_epoch=train_steps,
-                    epochs=epoch_num,
-                    validation_data=generator_val,
-                    validation_steps=val_steps,
-                    callbacks=callbacks)
-                scores = stylenet.model_decoder.evaluate_generator(
-                    generator=generator_test, steps=test_steps, verbose=1)
-                print('test loss', scores)
-            else:
-                stylenet.model_decoder_partial.fit_generator(
-                    generator=generator_train,
-                    steps_per_epoch=train_steps,
-                    epochs=epoch_num,
-                    validation_data=generator_val,
-                    validation_steps=val_steps,
-                    callbacks=callbacks)
-                scores = stylenet.model_decoder_partial.evaluate_generator(
-                    generator=generator_test, steps=test_steps, verbose=1)
-                print('test loss', scores)
+            stylenet.model_decoder.fit_generator(
+                generator=generator_train,
+                steps_per_epoch=train_steps,
+                epochs=epoch_num,
+                validation_data=generator_val,
+                validation_steps=val_steps,
+                callbacks=callbacks)
+            scores = stylenet.model_decoder.evaluate_generator(
+                generator=generator_test, steps=test_steps, verbose=1)
+            print('test loss', scores)
 
             references = []
             predictions = []

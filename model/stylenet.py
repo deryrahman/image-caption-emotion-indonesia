@@ -15,6 +15,7 @@ class StyleNet(RichModel):
 
     def __init__(self,
                  mode='factual',
+                 with_transfer_value=True,
                  trainable_model=True,
                  num_words=10000,
                  transfer_values_size=2048,
@@ -28,6 +29,7 @@ class StyleNet(RichModel):
                  lstm_layers=1,
                  dropout=0.0):
         self.trainable_model = trainable_model
+        self.with_transfer_value = with_transfer_value
         self.mode = mode
         self.num_words = num_words
         self.transfer_values_size = transfer_values_size
@@ -88,7 +90,7 @@ class StyleNet(RichModel):
         decoder_dense = Dense(
             self.num_words,
             activation='linear',
-            name='decoder_dense',
+            name='decoder_output',
             trainable=self.trainable_model)
         decoder_step = Lambda(lambda x: x[:, 1:, :], name='decoder_step')
 
@@ -115,26 +117,6 @@ class StyleNet(RichModel):
 
             return decoder_net
 
-        # connect encoder ResNet
-        self.model_encoder = Model(
-            inputs=[image_model.input], outputs=[transfer_layer.output])
-
-        # connect decoder FactoredLSTM
-        decoder_net = decoder_input
-        encoder_output = transfer_values_input
-        decoder_net = connect_decoder(encoder_output, decoder_net)
-        decoder_output = decoder_dense(decoder_net)
-        self.model_decoder = Model(
-            inputs=[transfer_values_input, decoder_input],
-            outputs=[decoder_output])
-
-        # connect decoder FactoredLSTM without transfer value
-        decoder_net = decoder_input
-        decoder_net = connect_decoder(None, decoder_net)
-        decoder_output = decoder_dense(decoder_net)
-        self.model_decoder_partial = Model(
-            inputs=[decoder_input], outputs=[decoder_output])
-
         # Adam optimizer
         optimizer = Adam(
             lr=self.learning_rate,
@@ -142,17 +124,38 @@ class StyleNet(RichModel):
             beta_2=self.beta_2,
             epsilon=self.epsilon)
 
-        # compile model decoder
-        decoder_target = tf.placeholder(dtype='int32', shape=(None, None))
-        self.model_decoder.compile(
-            optimizer=optimizer,
-            loss=sparse_cross_entropy,
-            target_tensors=[decoder_target])
+        if self.with_transfer_value:
+            # connect decoder FactoredLSTM
+            decoder_net = decoder_input
+            encoder_output = transfer_values_input
+            decoder_net = connect_decoder(encoder_output, decoder_net)
+            decoder_output = decoder_dense(decoder_net)
+            self.model_decoder = Model(
+                inputs=[transfer_values_input, decoder_input],
+                outputs=[decoder_output])
 
-        self.model_decoder_partial.compile(
-            optimizer=optimizer,
-            loss=sparse_cross_entropy,
-            target_tensors=[decoder_target])
+            decoder_target = tf.placeholder(dtype='int32', shape=(None, None))
+            self.model_decoder.compile(
+                optimizer=optimizer,
+                loss=sparse_cross_entropy,
+                target_tensors=[decoder_target])
+        else:
+            # connect decoder FactoredLSTM without transfer value
+            decoder_net = decoder_input
+            decoder_net = connect_decoder(None, decoder_net)
+            decoder_output = decoder_dense(decoder_net)
+            self.model_decoder = Model(
+                inputs=[decoder_input], outputs=[decoder_output])
+
+            decoder_target = tf.placeholder(dtype='int32', shape=(None, None))
+            self.model_decoder.compile(
+                optimizer=optimizer,
+                loss=sparse_cross_entropy,
+                target_tensors=[decoder_target])
+
+        # connect encoder ResNet
+        self.model_encoder = Model(
+            inputs=[image_model.input], outputs=[transfer_layer.output])
 
         self.model = self.model_decoder
         # plot_model(self.model, to_file='stylenet.png', show_shapes=True)

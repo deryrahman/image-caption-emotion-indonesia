@@ -119,7 +119,7 @@ class Seq2Seq(RichModel):
             recurrent_dropout=self.dropout,
             dropout=self.dropout)
         decoder_dense = Dense(
-            self.num_words, activation='linear', name='seq2seq_decoder_dense')
+            self.num_words, activation='linear', name='seq2seq_decoder_output')
 
         def connect_lstm(states, lstm_layers, net):
 
@@ -162,6 +162,13 @@ class Seq2Seq(RichModel):
             decoder_net = decoder_attention([encoder_net, decoder_input])
             return decoder_net
 
+        # Adam optimizer
+        optimizer = Adam(
+            lr=self.learning_rate,
+            beta_1=self.beta_1,
+            beta_2=self.beta_2,
+            epsilon=self.epsilon)
+
         if self.with_attention:
             # connect full model with attention
             encoder_net = transfer_values_input
@@ -171,6 +178,12 @@ class Seq2Seq(RichModel):
             self.model = Model(
                 inputs=[transfer_values_input, encoder_input, decoder_input],
                 outputs=[decoder_output])
+
+            decoder_target = tf.placeholder(dtype='int32', shape=(None, None))
+            self.model.compile(
+                optimizer=optimizer,
+                loss=sparse_cross_entropy,
+                target_tensors=decoder_target)
         else:
             # connect full model without attention
             encoder_net = transfer_values_input
@@ -181,6 +194,12 @@ class Seq2Seq(RichModel):
             self.model = Model(
                 inputs=[transfer_values_input, encoder_input, decoder_input],
                 outputs=[decoder_output])
+
+            decoder_target = tf.placeholder(dtype='int32', shape=(None, None))
+            self.model.compile(
+                optimizer=optimizer,
+                loss=sparse_cross_entropy,
+                target_tensors=decoder_target)
 
         # connect encoder FactoredLSTM
         encoder_net = transfer_values_input
@@ -205,20 +224,6 @@ class Seq2Seq(RichModel):
             decoder_output = decoder_dense(decoder_net)
             self.model_decoder = Model(
                 inputs=[decoder_input] + states, outputs=[decoder_output])
-
-        # Adam optimizer
-        optimizer = Adam(
-            lr=self.learning_rate,
-            beta_1=self.beta_1,
-            beta_2=self.beta_2,
-            epsilon=self.epsilon)
-
-        # model compile
-        decoder_target = tf.placeholder(dtype='int32', shape=(None, None))
-        self.model.compile(
-            optimizer=optimizer,
-            loss=sparse_cross_entropy,
-            target_tensors=decoder_target)
 
     def save(self, path, overwrite):
         """Rewrite save model, only save weight from decoder and kernel_S encoder

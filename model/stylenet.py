@@ -173,24 +173,42 @@ class StyleNet(RichModel):
         decoder_input_data = np.zeros(shape=shape, dtype=np.int)
 
         token_int = token_start
-        output_tokens = [token_int]
+        outputs_tokens = [(0, [token_int])]
         count_tokens = 0
 
-        while token_int != token_end and count_tokens < max_tokens:
+        while count_tokens < max_tokens:
 
-            decoder_input_data[0, count_tokens] = token_int
-            x_data = [transfer_values, decoder_input_data]
+            tmp = []
+            is_end_token = True
+            for output_tokens in outputs_tokens:
+                token_int = output_tokens[1][-1]
+                if token_int == token_end:
+                    tmp.append(output_tokens)
+                    continue
 
-            decoder_output = self.model_decoder.predict(x_data)
+                is_end_token = False
+                decoder_input_data[0, count_tokens] = token_int
+                x_data = [transfer_values, decoder_input_data]
 
-            tokens_pred = decoder_output[0, count_tokens, :]
-            token_int = np.argmax(tokens_pred)
+                decoder_output = self.model_decoder.predict(x_data)
 
-            output_tokens.append(token_int)
+                tokens_pred = decoder_output[0, count_tokens, :]
+                tokens_pred = softmax(tokens_pred)
+                tokens_int = tokens_pred.argsort()[-k:][::-1]
+
+                for token_int in tokens_int:
+                    score = output_tokens[0] + tokens_pred[token_int]
+                    tokens = output_tokens[1] + [token_int]
+                    tmp.append((score, tokens))
+
+            if is_end_token:
+                break
+
+            outputs_tokens = sorted(tmp, key=lambda t: t[0])[-k:]
 
             count_tokens += 1
 
-        return np.array(output_tokens), np.array(transfer_values[0])
+        return np.array(outputs_tokens[0][1]), np.array(transfer_values[0])
 
     def save(self, path, overwrite):
         """Rewrite save model, only save weight from decoder

@@ -6,7 +6,7 @@ from utils.evaluator import bleu_evaluator
 from utils.predictor import generate_caption
 from callbacks import ModelCheckpoint
 from keras.callbacks import TensorBoard, EarlyStopping
-# from tensorflow.core.protobuf import rewriter_config_pb2
+from tensorflow.core.protobuf import rewriter_config_pb2
 from keras import backend as K
 import tensorflow as tf
 import numpy as np
@@ -59,8 +59,8 @@ def main(args):
 
     K.clear_session()
     config = tf.ConfigProto()
-    # off = rewriter_config_pb2.RewriterConfig.OFF
-    # config.graph_options.rewrite_options.memory_optimization = off
+    off = rewriter_config_pb2.RewriterConfig.OFF
+    config.graph_options.rewrite_options.memory_optimization = off
 
     config.gpu_options.allow_growth = True
     config.gpu_options.per_process_gpu_memory_fraction = gpu_frac
@@ -186,21 +186,17 @@ def main(args):
             filepath=path_checkpoint,
             monitor='val_loss',
             verbose=1,
-            save_best_only=False)
+            save_best_only=True)
 
         callback_tensorboard = TensorBoard(
             log_dir=log_dir, histogram_freq=0, write_graph=False)
 
-        callbacks = [callback_checkpoint, callback_tensorboard]
-        if early_stop > 0:
-            callback_earystoping = EarlyStopping(
-                monitor='val_loss',
-                verbose=1,
-                patience=early_stop,
-                min_delta=0.15)
-            callbacks = [
-                callback_checkpoint, callback_earystoping, callback_tensorboard
-            ]
+        callback_earystoping = EarlyStopping(
+            monitor='val_loss', verbose=1, patience=early_stop, min_delta=0.1)
+
+        callbacks = [
+            callback_checkpoint, callback_earystoping, callback_tensorboard
+        ]
 
         stylenet.model_decoder.fit_generator(
             generator=generator_train,
@@ -417,14 +413,12 @@ def main(args):
         callback_tensorboard = TensorBoard(
             log_dir=log_dir, histogram_freq=0, write_graph=False)
 
-        callbacks = [callback_checkpoint, callback_tensorboard]
-        if early_stop > 0:
-            callback_earystoping = EarlyStopping(
-                monitor='val_loss',
-                verbose=1,
-                patience=early_stop,
-                min_delta=0.15)
-            callbacks += [callback_earystoping]
+        callback_earystoping = EarlyStopping(
+            monitor='val_loss', verbose=1, patience=early_stop, min_delta=0.1)
+
+        callbacks = [
+            callback_checkpoint, callback_tensorboard, callback_earystoping
+        ]
 
         if emotion_training_mode == 'seq2seq':
             seq2seq.model.fit_generator(
@@ -491,7 +485,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--beam_search',
         type=int,
-        default=1,
+        default=10,
         help='beam search for generating sequence')
     parser.add_argument(
         '--load_model',

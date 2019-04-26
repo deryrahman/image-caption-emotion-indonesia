@@ -24,6 +24,7 @@ def main(args):
     epoch_num = args.epoch_num
     checkpoints_path = args.checkpoints_path
     dataset_path = args.dataset_path
+    result_path = args.result_path
     dataset = args.dataset
     logs_path = args.logs_path
     mode = args.mode
@@ -46,16 +47,22 @@ def main(args):
     beam_search = args.beam_search
     dropout = args.dropout
 
+    # # for local test only
+    # epoch_num = 1
+    # batch_size = 2
+
     assert_path_error(dataset_path)
     assert_path_error(dataset_path + '/' + mode)
     assert_path_error(dataset_path + '/img')
     assert_path_error(dataset_path + '/captions.json')
     assert_path_error(dataset_path + '/cache/tokenizer.pkl')
     assert_path_error(dataset_path + '/cache/transfer_values.pkl')
-    assert_path_error(checkpoints_path)
 
     if not os.path.exists(checkpoints_path + '/stylenet'):
-        os.mkdir(checkpoints_path + '/stylenet')
+        os.makedirs(checkpoints_path + '/stylenet')
+
+    if not os.path.exists(result_path):
+        os.makedirs(result_path)
 
     K.clear_session()
     config = tf.ConfigProto()
@@ -221,7 +228,9 @@ def main(args):
                 mode='factual')
             predictions.append(output_text)
             references.append(refs)
-        print(bleu_evaluator(references, predictions))
+
+        with open(result_path + '/result.factual.txt', 'w') as f:
+            f.write(str(bleu_evaluator(references, predictions)))
     else:
         train, val, test = load_caption(dataset_path + '/factual')
         filenames_train, captions_train = train
@@ -374,6 +383,7 @@ def main(args):
             seq2seq = Seq2Seq(
                 mode=mode,
                 with_attention=with_attention == 1,
+                trainable_model=False,
                 num_words=num_words,
                 state_size=state_size,
                 embedding_size=embedding_size,
@@ -445,7 +455,11 @@ def main(args):
                     seq2seq=seq2seq)
                 predictions.append(output_text)
                 references.append(refs)
-            print(bleu_evaluator(references, predictions))
+
+            with open(
+                    result_path + '/result.{}.seq2seq.{}.txt'.format(
+                        mode, 'att' + str(with_attention)), 'w') as f:
+                f.write(str(bleu_evaluator(references, predictions)))
 
         elif emotion_training_mode == 'stylenet':
             stylenet.model_decoder.fit_generator(
@@ -470,7 +484,10 @@ def main(args):
                     mode=mode)
                 predictions.append(output_text)
                 references.append(refs)
-            print(bleu_evaluator(references, predictions))
+
+            with open(result_path + '/result.{}.stylenet.txt'.format(mode),
+                      'w') as f:
+                f.write(str(bleu_evaluator(references, predictions)))
 
 
 if __name__ == '__main__':
@@ -507,6 +524,11 @@ if __name__ == '__main__':
         type=str,
         default='./checkpoints',
         help='path for save checkpoints model')
+    parser.add_argument(
+        '--result_path',
+        type=str,
+        default='./result',
+        help='path for save BLEU score result')
     parser.add_argument(
         '--logs_path',
         type=str,

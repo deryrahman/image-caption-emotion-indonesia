@@ -22,7 +22,6 @@ def assert_path_error(path):
 
 def main(args):
     epoch_num = args.epoch_num
-    injection_mode = args.injection_mode
     checkpoints_path = args.checkpoints_path
     dataset_path = args.dataset_path
     dataset = args.dataset
@@ -53,6 +52,7 @@ def main(args):
     assert_path_error(dataset_path + '/captions.json')
     assert_path_error(dataset_path + '/cache/tokenizer.pkl')
     assert_path_error(dataset_path + '/cache/transfer_values.pkl')
+    assert_path_error(checkpoints_path)
 
     if not os.path.exists(checkpoints_path + '/stylenet'):
         os.mkdir(checkpoints_path + '/stylenet')
@@ -76,21 +76,19 @@ def main(args):
     print('num_words', num_words)
 
     path_checkpoint = checkpoints_path + (
-        '/stylenet/{dataset}.checkpoint.id.injection{injection_mode}'
+        '/stylenet/{dataset}.checkpoint.id'
         '.layer{lstm_layers}.factored{factored_size}.state{state_size}.embedding{embedding_size}.keras'
     ).format(
         dataset=dataset,
-        injection_mode=injection_mode,
         lstm_layers=lstm_layers,
         factored_size=factored_size,
         state_size=state_size,
         embedding_size=embedding_size)
     log_dir = (
-        logs_path + '/stylenet/{mode}/{injection}/'
+        logs_path + '/stylenet/{mode}/'
         '{dataset}_epoch_{start_from}_{to}_layer{layer_size}_factored{factored_size}_'
         'state{state_size}_embedding{embedding_size}').format(
             mode=mode,
-            injection=injection_mode,
             dataset=dataset,
             start_from=0,
             to=epoch_num,
@@ -162,7 +160,6 @@ def main(args):
             with_transfer_values=with_transfer_value == 1)
 
         stylenet = StyleNet(
-            injection_mode=injection_mode,
             with_transfer_value=with_transfer_value == 1,
             num_words=num_words,
             trainable_model=True,
@@ -357,7 +354,6 @@ def main(args):
         print('test steps', test_steps)
 
         stylenet = StyleNet(
-            injection_mode=injection_mode,
             with_transfer_value=with_transfer_value == 1,
             num_words=num_words,
             trainable_model=False,
@@ -383,7 +379,6 @@ def main(args):
             seq2seq = Seq2Seq(
                 mode=mode,
                 with_attention=with_attention == 1,
-                injection_mode=injection_mode,
                 num_words=num_words,
                 state_size=state_size,
                 embedding_size=embedding_size,
@@ -530,11 +525,6 @@ if __name__ == '__main__':
         type=str,
         default='factual',
         help='emotion mode; factual, happy, sad, angry')
-    parser.add_argument(
-        '--injection_mode',
-        type=str,
-        default='init',
-        help='transfer value injection mode')
     parser.add_argument(
         '--with_transfer_value',
         type=int,

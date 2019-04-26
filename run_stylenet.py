@@ -22,10 +22,8 @@ def assert_path_error(path):
 
 def main(args):
     epoch_num = args.epoch_num
-    injection_mode = args.injection_mode
     checkpoints_path = args.checkpoints_path
     dataset_path = args.dataset_path
-    dataset = args.dataset
     logs_path = args.logs_path
     mode = args.mode
     load_model = args.load_model
@@ -41,7 +39,7 @@ def main(args):
     epsilon = args.epsilon
     lstm_layers = args.lstm_layers
     batch_size = args.batch_size
-    num_words = args.num_words
+    dropout = args.dropout
 
     result_path = checkpoints_path + '/stylenet/result'
 
@@ -168,7 +166,8 @@ def main(args):
         learning_rate=learning_rate,
         beta_1=beta_1,
         beta_2=beta_2,
-        epsilon=epsilon)
+        epsilon=epsilon,
+        dropout=dropout)
 
     callback_checkpoint = ModelCheckpoint(
         stylenet,
@@ -177,20 +176,7 @@ def main(args):
         verbose=1,
         save_best_only=True)
     callback_earystoping = EarlyStopping(
-        monitor='val_loss', verbose=1, patience=10)
-    log_dir = (
-        logs_path + '/stylenet/{mode}/{injection}/'
-        '{dataset}_epoch_{start_from}_{to}_layer{layer_size}_factored{factored_size}_'
-        'state{state_size}_embedding{embedding_size}').format(
-            mode=mode,
-            injection=injection_mode,
-            dataset=dataset,
-            start_from=0,
-            to=epoch_num,
-            layer_size=lstm_layers,
-            factored_size=factored_size,
-            state_size=state_size,
-            embedding_size=embedding_size)
+        monitor='val_loss', verbose=1, patience=10, min_delta=0.1)
     callback_tensorboard = TensorBoard(
         log_dir=log_dir, histogram_freq=0, write_graph=False)
 
@@ -215,7 +201,10 @@ def main(args):
 
     scores = stylenet.model.evaluate_generator(
         generator=generator_test, steps=test_steps, verbose=1)
+
     print('test loss', scores)
+    with open(result_path + '/loss.{}.txt'.format(mode), 'w') as f:
+        f.write(str(scores))
 
     stylenet = StyleNet(
         with_transfer_value=True,
@@ -246,10 +235,19 @@ def main(args):
             decoder_model=stylenet.model_decoder,
             tokenizer=tokenizer,
             img_size=img_size)
-        print(output_text)
         predictions.append(output_text)
         references.append(refs)
-    print(bleu_evaluator(references, predictions))
+
+    with open(result_path + '/pred.{}.txt'.format(mode), 'w') as f:
+        f.write('\n'.join([
+            '{}\t{}'.format(fn, pred)
+            for fn, pred in zip(filenames_test, predictions)
+        ]))
+
+    bleu_score = bleu_evaluator(references, predictions)
+    print(bleu_score)
+    with open(result_path + '/result.{}.txt'.format(mode), 'w') as f:
+        f.write(str(bleu_score))
 
 
 if __name__ == '__main__':
@@ -261,11 +259,6 @@ if __name__ == '__main__':
         type=int,
         default=0,
         help='load saved model from checkpoints or not (1, 0)')
-    parser.add_argument(
-        '--dataset',
-        type=str,
-        default='flickr',
-        help='dataset either flickr or coco')
     parser.add_argument(
         '--dataset_path',
         type=str,
@@ -282,20 +275,10 @@ if __name__ == '__main__':
         default='./logs',
         help='path for Tensorboard logging')
     parser.add_argument(
-        '--num_words',
-        type=int,
-        default=10000,
-        help='num words used for embedding layer')
-    parser.add_argument(
         '--mode',
         type=str,
         default='factual',
         help='emotion mode; factual, happy, sad, angry')
-    parser.add_argument(
-        '--injection_mode',
-        type=str,
-        default='init',
-        help='transfer value injection mode')
     parser.add_argument(
         '--with_transfer_value',
         type=int,
@@ -336,6 +319,11 @@ if __name__ == '__main__':
         type=int,
         default=512,
         help='number of Factored LSTM state units')
+    parser.add_argument(
+        '--dropout',
+        type=float,
+        default=0.22,
+        help='used for dropout rate for all specific layer')
     parser.add_argument(
         '--learning_rate',
         type=float,

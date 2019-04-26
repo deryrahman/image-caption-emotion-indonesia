@@ -71,7 +71,7 @@ class NIC(RichModel):
                 dropout=self.dropout) for i in range(self.lstm_layers)
         ]
         decoder_dense = Dense(
-            self.num_words, activation='linear', name='decoder_dense')
+            self.num_words, activation='linear', name='decoder_output')
         decoder_step = Lambda(lambda x: x[:, 1:, :], name='decoder_step')
 
         def connect_lstm(lstm_layers, net):

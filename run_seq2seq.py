@@ -79,7 +79,7 @@ def main(args):
     print('num_words', num_words)
 
     path_checkpoint = checkpoints_path + (
-        '/stylenet/checkpoint.id'
+        '/seq2seq/checkpoint.id'
         '.layer{lstm_layers}.factored{factored_size}.state{state_size}.embedding{embedding_size}.keras'
     ).format(
         lstm_layers=lstm_layers,
@@ -87,7 +87,7 @@ def main(args):
         state_size=state_size,
         embedding_size=embedding_size)
     log_dir = (
-        logs_path + '/stylenet/{mode}/'
+        logs_path + '/seq2seq/{mode}/'
         'epoch_{start_from}_{to}_layer{layer_size}_factored{factored_size}_'
         'state{state_size}_embedding{embedding_size}').format(
             mode=mode,
@@ -198,10 +198,10 @@ def main(args):
         dropout=dropout)
     try:
         stylenet.load(path_checkpoint)
+        print('load from factual stylent. OK')
     except Exception as error:
         print("Error trying to load checkpoint.")
         print(error)
-    print('load from factual stylent. OK')
 
     seq2seq = Seq2Seq(
         mode=mode,
@@ -226,10 +226,10 @@ def main(args):
     if load_model == 1:
         try:
             seq2seq.load(path_checkpoint)
+            print('load seq2seq. OK')
         except Exception as error:
             print("Error trying to load checkpoint.")
             print(error)
-        print('load seq2seq. OK')
 
     callback_checkpoint = ModelCheckpoint(
         seq2seq,

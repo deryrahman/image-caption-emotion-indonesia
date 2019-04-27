@@ -3,7 +3,7 @@ from preprocess.tokenizer import mark_end, mark_start
 from keras import backend as K
 
 
-def generate_caption(image_path, tokenizer, rich_model, k=3, max_tokens=30):
+def generate_caption(image_path, tokenizer, rich_model, max_tokens=30):
 
     token_start = tokenizer.word_index[mark_start.strip()]
     token_end = tokenizer.word_index[mark_end.strip()]
@@ -16,7 +16,6 @@ def generate_caption(image_path, tokenizer, rich_model, k=3, max_tokens=30):
         image=image,
         token_start=token_start,
         token_end=token_end,
-        k=k,
         max_tokens=max_tokens)
 
     output_text = ''
@@ -32,7 +31,6 @@ def seq2seq_generate_caption(transfer_values,
                              input_tokens,
                              tokenizer,
                              rich_model,
-                             k=3,
                              max_tokens=30):
     token_start = tokenizer.word_index[mark_start.strip()]
     token_end = tokenizer.word_index[mark_end.strip()]
@@ -42,7 +40,6 @@ def seq2seq_generate_caption(transfer_values,
         input_tokens=input_tokens,
         token_start=token_start,
         token_end=token_end,
-        k=k,
         max_tokens=max_tokens)
 
     output_text = ''

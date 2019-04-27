@@ -310,12 +310,7 @@ class Seq2Seq(RichModel):
                 input_tokens,
                 token_start,
                 token_end,
-                k=3,
                 max_tokens=30):
-
-        def softmax(x):
-            e_x = np.exp(x - np.max(x))
-            return e_x / e_x.sum(axis=0)
 
         _, state_h, state_c = self.model_encoder.predict([[transfer_values],
                                                           [input_tokens]])
@@ -325,39 +320,20 @@ class Seq2Seq(RichModel):
         decoder_input_data = np.zeros(shape=shape, dtype=np.int)
 
         token_int = token_start
-        outputs_tokens = [(1, [token_int])]
+        output_tokens = [token_int]
         count_tokens = 0
 
-        while count_tokens < max_tokens:
+        while token_int != token_end and count_tokens < max_tokens:
+            decoder_input_data[0, count_tokens] = token_int
+            x_data = [decoder_input_data] + states
 
-            tmp = []
-            is_end_token = True
-            for output_tokens in outputs_tokens:
-                token_int = output_tokens[1][-1]
-                if token_int == token_end:
-                    tmp.append(output_tokens)
-                    continue
+            decoder_output = self.model_decoder.predict(x_data)
 
-                is_end_token = False
-                decoder_input_data[0, count_tokens] = token_int
-                x_data = [decoder_input_data] + states
+            token_onehot = decoder_output[0, count_tokens, :]
+            token_int = np.argmax(token_onehot)
 
-                decoder_output = self.model_decoder.predict(x_data)
-
-                tokens_pred = decoder_output[0, count_tokens, :]
-                tokens_pred = softmax(tokens_pred)
-                tokens_int = tokens_pred.argsort()[-k:][::-1]
-
-                for token_int in tokens_int:
-                    score = output_tokens[0] * tokens_pred[token_int]
-                    tokens = output_tokens[1] + [token_int]
-                    tmp.append((score, tokens))
-
-            if is_end_token:
-                break
-
-            outputs_tokens = sorted(tmp, key=lambda t: t[0])[-k:]
+            output_tokens.append(token_int)
 
             count_tokens += 1
 
-        return np.array(outputs_tokens[0][1])
+        return np.array(output_tokens)

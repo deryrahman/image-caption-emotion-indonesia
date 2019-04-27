@@ -176,11 +176,7 @@ def main(args):
         verbose=1,
         save_best_only=True)
     callback_earystoping = EarlyStopping(
-        monitor='val_loss',
-        verbose=1,
-        patience=10,
-        min_delta=0.1,
-        restore_best_weights=True)
+        monitor='val_loss', verbose=1, patience=10, restore_best_weights=True)
     callback_tensorboard = TensorBoard(
         log_dir=log_dir, histogram_freq=0, write_graph=False)
 
@@ -233,14 +229,12 @@ def main(args):
 
     references = []
     predictions = []
-    img_size = K.int_shape(stylenet.model_encoder.input)[1:3]
     for filename, refs in zip(filenames_test, captions_test):
         _, _, output_text = generate_caption(
             image_path=dataset_path + '/img/' + filename,
-            image_model_transfer=stylenet.model_encoder,
-            decoder_model=stylenet.model_decoder,
             tokenizer=tokenizer,
-            img_size=img_size)
+            rich_model=stylenet,
+        )
         predictions.append(output_text)
         references.append(refs)
 

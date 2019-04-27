@@ -42,7 +42,7 @@ def main(args):
     batch_size = args.batch_size
     dropout = args.dropout
 
-    result_path = checkpoints_path + '/stylenet/result'
+    result_path = checkpoints_path + '/seq2seq/result'
 
     # # for local test only
     # epoch_num = 1
@@ -55,8 +55,8 @@ def main(args):
     assert_path_error(dataset_path + '/cache/tokenizer.pkl')
     assert_path_error(dataset_path + '/cache/transfer_values.pkl')
 
-    if not os.path.exists(checkpoints_path + '/stylenet'):
-        os.makedirs(checkpoints_path + '/stylenet')
+    if not os.path.exists(checkpoints_path + '/seq2seq'):
+        os.makedirs(checkpoints_path + '/seq2seq')
 
     if not os.path.exists(result_path):
         os.makedirs(result_path)

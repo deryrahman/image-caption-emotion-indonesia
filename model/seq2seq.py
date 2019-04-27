@@ -239,7 +239,8 @@ class Seq2Seq(RichModel):
             path {str} -- string path to save model
             overwrite {bool} -- overwrite existing model or not
         """
-        self.model_decoder.save_weights(path, overwrite=overwrite)
+        self.model_decoder.save_weights(
+            '{}.{}'.format(path, self.mode), overwrite=overwrite)
 
         # weights values for kernel_S
         weight_values = self._get_weight_values(
@@ -311,7 +312,10 @@ class Seq2Seq(RichModel):
                 token_end,
                 max_tokens=30):
 
-        states = self.model_encoder.predict([[transfer_values], [input_tokens]])
+        _, state_h, state_c = self.model_encoder.predict([[transfer_values],
+                                                          [input_tokens]])
+        states = [state_h, state_c]
+
         shape = (1, max_tokens)
         decoder_input_data = np.zeros(shape=shape, dtype=np.int)
 

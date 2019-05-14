@@ -1,6 +1,6 @@
 {
-    "python.venvPath": "./env",
-    "python.pythonPath": "env/bin/python",
+    "python.venvPath": "/Users/dery/.pyenv/versions/final-project",
+    "python.pythonPath": "/Users/dery/.pyenv/versions/final-project/bin/python",
     "python.linting.pylintEnabled": false,
     "python.linting.flake8Enabled": true,
     "python.linting.enabled": true,
@@ -12,6 +12,10 @@
     "python.linting.flake8Args": [
         "--max-line-length=120",
         "--ignore=E731,E265,E231"
+    ],
+    "python.linting.pylintArgs": [
+        "--errors-only",
+        "--generated-members=numpy.* ,torch.* ,cv2.* , cv.*"
     ],
     "editor.formatOnSave": true
 }

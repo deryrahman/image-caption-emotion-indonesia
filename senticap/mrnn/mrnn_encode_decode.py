@@ -8,11 +8,11 @@ import theano
 from theano.ifelse import ifelse
 import theano.tensor as T
 import sys
-import cPickle
+import pickle
 from sklearn.decomposition import TruncatedSVD
 from sklearn.preprocessing import StandardScaler, Normalizer
 from nltk.corpus import brown
-from mrnn_solver import *
+from .mrnn_solver import *
 # import matplotlib.pyplot as plt
 import string
 
@@ -22,8 +22,8 @@ import json
 import mkl
 mkl.set_num_threads(6)
 
-from mrnn_util import *
-from mrnn_io import *
+from .mrnn_util import *
+from .mrnn_io import *
 sys.path.append("../LangModel")
 from mrnn_lm_modular import *
 
@@ -111,7 +111,7 @@ class RNNModel:
 
         self.model = model
         if conf_new is not None:
-            for k,v in conf_new.items():
+            for k,v in list(conf_new.items()):
                 conf[k] = v
 
         self.conf = conf
@@ -155,10 +155,10 @@ class RNNModel:
 
         if self.conf['DECODER']:
             encoder_data = self.encoder.save_model("", to_file=False)
-            cPickle.dump((self.conf, self.model, encoder_data), open(filename, "wb"), protocol=2)
+            pickle.dump((self.conf, self.model, encoder_data), open(filename, "wb"), protocol=2)
         else:
             if to_file:
-                cPickle.dump((self.conf, self.model), open(filename, "wb"), protocol=2)
+                pickle.dump((self.conf, self.model), open(filename, "wb"), protocol=2)
             else:
                 return (self.conf, self.model)
 
@@ -166,12 +166,12 @@ class RNNModel:
         ne = ""
         if not self.conf['DECODER']:
             ne = "_encoder"
-        for name, data in layers.items():
+        for name, data in list(layers.items()):
             setattr(self, name, theano.shared(name=name+ne, value=data, borrow=True))
 
     def load_model(self, filename, conf=None, load_solver_params=True):
-        print filename
-        data = cPickle.load(open(filename, "rb"))
+        print(filename)
+        data = pickle.load(open(filename, "rb"))
         if len(data) == 3:
             encoder_data = data[2]
             data = (data[0], data[1])
@@ -186,10 +186,10 @@ class RNNModel:
         self.loaded_model = True
 
         conf_new, self.model = data
-        for k,v in conf_new.items():
+        for k,v in list(conf_new.items()):
             self.conf[k] = v
         if conf is not None:
-            for k,v in conf.items():
+            for k,v in list(conf.items()):
                 self.conf[k] = v
 
 
@@ -260,8 +260,8 @@ class RNNModel:
     def convert_X_to_lm_vocab(self, X):
         X_lm = np.zeros_like(X)
         last_tok = 1
-        for r in xrange(X_lm.shape[0]):
-            for c in xrange(X_lm.shape[1]):
+        for r in range(X_lm.shape[0]):
+            for c in range(X_lm.shape[1]):
                 if X[r, c] in self.mm2lm_map:
                     X_lm[r, c] = self.mm2lm_map[X[r, c]]
                     if X_lm[r, c] != 0:
@@ -644,7 +644,7 @@ class RNNModel:
 
         #calculate the cost for this minibatch (add L2 reg to loss function)
         regc = T.constant(self.conf['L2_REG_CONST'], dtype=theano.config.floatX)
-        self.cost = self.loss + regc * np.sum(map(lambda xx: (xx ** 2).sum(), params_train)) 
+        self.cost = self.loss + regc * np.sum([(xx ** 2).sum() for xx in params_train]) 
 
         #build the SGD weight updates
         batch_size_f = T.constant(self.conf['batch_size_val'], dtype=theano.config.floatX)
@@ -656,7 +656,7 @@ class RNNModel:
         #comp_grads = [g*m if m is not None else g for g,m in zip(comp_grads, params_bp_mask) ]
         weight_updates = get_sgd_weight_updates(self.conf['GRAD_METHOD'], comp_grads, params_train, self.hist_grad, self.delta_grad, 
                                         decay=self.conf['DECAY_RATE'], learning_rate=self.conf['LEARNING_RATE'])
-        print "Weight updates:", len(weight_updates)
+        print("Weight updates:", len(weight_updates))
         #if self.conf['DECODER']:
         #    weight_updates[9] = (weight_updates[9][0], T.printing.Print("Comp_grads_9")(weight_updates[9][1]))
 
@@ -692,9 +692,9 @@ class RNNModel:
             else:
                 inputs = [indx]
             if self.conf['DECODER']:
-                print len(comp_grads)
-                print len(params_train)
-                print weight_updates
+                print(len(comp_grads))
+                print(len(params_train))
+                print(weight_updates)
                 self.train = theano.function(inputs, 
                             outputs=[self.loss, self.cost, self.perplexity_batch], 
                             updates=weight_updates, 
@@ -827,7 +827,7 @@ class RNNModel:
                 tr = self.train(cur_idx)
                 #sys.exit(0)
             #print self.encoder.w_lstm.get_value()
-            print tr, num_iter * batch_size_val / float(num_train_examples)
+            print(tr, num_iter * batch_size_val / float(num_train_examples))
 
             if iter_cb_freq != 0 and iter_callback is not None and num_iter % iter_cb_freq == 0:
                 iter_callback(self, num_iter * batch_size_val / float(num_train_examples))
@@ -840,7 +840,7 @@ class RNNModel:
         if self.X_valid.shape[0] % batch_size_val != 0: num_batches+=1
         ppl_v_total = 0.0
         ppl_n_total = 0.0
-        for i in xrange(num_batches):
+        for i in range(num_batches):
             ii = i * batch_size_val
             if self.conf['JOINED_MODEL']:
                 cv_X = self.convert_X_to_lm_vocab(self.X_valid[ii:ii+batch_size_val])
@@ -855,17 +855,17 @@ class RNNModel:
                                                 self.encoder.X_valid[ii:ii+batch_size_val],
                                                 self.encoder.V_valid[ii:ii+batch_size_val], 
                                                 self.encoder.X_valid_mask[ii:ii+batch_size_val])
-                    for idx in xrange(ii, ii+batch_size_val):
+                    for idx in range(ii, ii+batch_size_val):
                         xt = self.encoder.X_valid[idx]
                         for x in xt:
                             if x == 0:break
-                            print self.encoder.model['i2w'][x],
-                        print ""
+                            print(self.encoder.model['i2w'][x], end=' ')
+                        print("")
                         xt = self.X_valid[idx]
                         for x in xt:
                             if x == 0:break
-                            print self.model['i2w'][x],
-                        print "\n"
+                            print(self.model['i2w'][x], end=' ')
+                        print("\n")
                     sys.exit(0)
                 else:
                     ppl_v, ppl_n = self.get_ppl_val(self.X_valid[ii:ii+batch_size_val], 
@@ -937,7 +937,7 @@ class RNNModel:
     def sample_sentence(self, v, encoder_words=None, MAP=False):
         sentence = []
         last_step = None
-        for i in xrange(self.conf['MAX_SENTENCE_LEN'] + 1):
+        for i in range(self.conf['MAX_SENTENCE_LEN'] + 1):
             last_step = self.do_one_step(v, last_step, encoder_words)
             c = np.arange(last_step['s_t'][0].shape[0])
             p = np.array(last_step['s_t'][0], dtype=np.float64)
@@ -977,9 +977,9 @@ def main():
 
     rnn.build_model_trainer()
     def iter_callback(rnn, epoch):
-		print "Epoch: %f" % epoch
-		for i in xrange(10):
-			print rnn.get_sentence(rnn.V_valid[np.random.randint(rnn.V_valid.shape[0])])#np.zeros((1,)))
+		print("Epoch: %f" % epoch)
+		for i in range(10):
+			print(rnn.get_sentence(rnn.V_valid[np.random.randint(rnn.V_valid.shape[0])]))#np.zeros((1,)))
 
     def epoch_callback(rnn, num_epoch):
         rnn.save_model("saved_model_test_%d.pik" % num_epoch)

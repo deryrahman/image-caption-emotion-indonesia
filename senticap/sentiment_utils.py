@@ -1,4 +1,4 @@
-import cPickle
+import pickle
 import spacy
 from mrnn.mrnn import *
 from mrnn.mrnn_algorithms import *
@@ -21,8 +21,8 @@ def get_anp_reward(goal, anp_to_senti):
 #the caffe scores for each ANP
 class ANPVisualScores:
     def __init__(self, score_filename, id_filename):
-        self.anp_pred = cPickle.load(open(score_filename, "rb"))
-        self.anp_to_id = cPickle.load(open(id_filename, "rb"))
+        self.anp_pred = pickle.load(open(score_filename, "rb"))
+        self.anp_to_id = pickle.load(open(id_filename, "rb"))
         
     def get_score(self, img_idx, anp):
         if anp not in self.anp_to_id: return 1.0 / len(self.anp_to_id)
@@ -33,7 +33,7 @@ class ANPVisualScores:
 #the sentiment scores for each ANP
 class SentiScores:
     def __init__(self, filename):
-        self.noun_to_senti = cPickle.load(open(filename, "rb"))
+        self.noun_to_senti = pickle.load(open(filename, "rb"))
         self.cache = {}
 
     def get_anp_to_score(self, all_nouns, goal=None):
@@ -140,9 +140,9 @@ def anp_joint_score_prob(goal, w2i, noun_pd, img_idx, sentiscore, vscore, scores
         score = C[0] * vis_score + C[1] * pd_score + C[2] * senti_score #+ C[3] * adj_fluency
         anp_to_score[anp] = score
 
-    z = scipy.misc.logsumexp(anp_to_score.values())
-    anp_to_score = sorted(anp_to_score.items(), key = lambda x: x[1], reverse=True)
-    for i in xrange(len(anp_to_score)):
+    z = scipy.misc.logsumexp(list(anp_to_score.values()))
+    anp_to_score = sorted(list(anp_to_score.items()), key = lambda x: x[1], reverse=True)
+    for i in range(len(anp_to_score)):
         anp_to_score[i] = (anp_to_score[i][0], -(anp_to_score[i][1] - z))
     best_anp_real_score = anp_to_score[0][1]
     best_anp_val = anp_to_score[0][0]
@@ -176,8 +176,8 @@ class ClosestWordFinder:
         self.nlp = spacy.load('en')
         word_vecs = []
         word_to_i = []
-        for w, i in w2i.items():
-            v = self.nlp.vocab[unicode(w)].vector
+        for w, i in list(w2i.items()):
+            v = self.nlp.vocab[str(w)].vector
             word_vecs.append(v)
             word_to_i.append(i)
         word_vecs = np.array(word_vecs).T
@@ -190,7 +190,7 @@ class ClosestWordFinder:
         if chosen_word in self.w2i:
             return self.w2i[chosen_word]
         
-        v = self.nlp.vocab[unicode(chosen_word)].vector
+        v = self.nlp.vocab[str(chosen_word)].vector
         i = np.dot(v, self.word_vecs).argmax()
         return self.word_to_i[i]
 

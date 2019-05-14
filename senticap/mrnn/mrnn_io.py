@@ -4,7 +4,7 @@ import scipy
 import scipy.io
 import json
 import theano
-import cPickle
+import pickle
 
 DO_NEG = False
 
@@ -62,7 +62,7 @@ class RNNDataProvider:
         self.img_id = []
         self.tok_to_feat = []
         self.img_filename = []
-        data = cPickle.load(open(self.DATASET_FILE_DATA, 'r'))
+        data = pickle.load(open(self.DATASET_FILE_DATA, 'r'))
         np.random.seed(1234)
         np.random.shuffle(data)
         #np.random.seed()
@@ -103,7 +103,7 @@ class RNNDataProvider:
                 self.feat_to_tok.append([num_tok])
                 self.img_id.append(i)
                 num_tok += 1
-        print "Sentences: ", len(self.tokens)
+        print("Sentences: ", len(self.tokens))
 
     #read the dataset
     def read_dataset_mm(self):
@@ -117,7 +117,7 @@ class RNNDataProvider:
 
         js = json.load(open(self.DATASET_FILE_DATA, "r"))
 
-        self.feat_to_tok = [[] for i in xrange(len(js["images"]))]
+        self.feat_to_tok = [[] for i in range(len(js["images"]))]
         num_tok = 0
         for i, img in enumerate(js["images"]):
             if img["split"] == "train":
@@ -162,7 +162,7 @@ class RNNDataProvider:
 
         js = json.load(open(self.DATASET_FILE_DATA, "r"))
 
-        self.feat_to_tok = [[] for i in xrange(len(js["images"]))]
+        self.feat_to_tok = [[] for i in range(len(js["images"]))]
         num_tok = 0
         num_train = 0
         num_test = 0
@@ -240,7 +240,7 @@ class RNNDataProvider:
 
         js = json.load(open(self.DATASET_FILE_DATA, "r"))
 
-        self.feat_to_tok = [[] for i in xrange(len(js["images"]))]
+        self.feat_to_tok = [[] for i in range(len(js["images"]))]
         num_tok = 0
         for i, img in enumerate(js["images"]):
             if img["split"] == "train":
@@ -357,7 +357,7 @@ class RNNDataProvider:
         # elif source == "desc":
         #     data_source = self.tokens_desc
         w_count = {}
-        for i in xrange(len(self.tokens)):
+        for i in range(len(self.tokens)):
             if self.split[i] != data_split:
                 continue
             for w in self.tokens[i]:
@@ -381,7 +381,7 @@ class RNNDataProvider:
             cur_vocab_indx += 1
 
         self.w2i = w2idx
-        self.i2w = dict([(v[1], v[0]) for v in w2idx.items()])
+        self.i2w = dict([(v[1], v[0]) for v in list(w2idx.items())])
 
     #represent a sentences as indices from the vocabulary
     def tokenize_sentence(self, sentence):
@@ -417,7 +417,7 @@ class RNNDataProvider:
         anp_sw_pos = []
         sentiment = []
         X_pad = []
-        for i in xrange(len(data_source)):
+        for i in range(len(data_source)):
             if self.split[i] & data_split != self.split[i]:
                 continue
             tok, used = self.tokenize_sentence(data_source[i])
@@ -474,7 +474,7 @@ class RNNDataProvider:
         else:
             idx_rotate = np.arange(Id.shape[0])
 
-        print "Dataset Size:", Xlen.shape
+        print("Dataset Size:", Xlen.shape)
         idx = np.arange(X_pad.shape[0])
         if randomize:
             np.random.shuffle(idx)

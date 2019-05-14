@@ -4,7 +4,7 @@ from nltk.stem import WordNetLemmatizer
 from mrnn.mrnn_switched import *
 from mrnn.mrnn_algorithms import *
 import mrnn.mrnn_io
-import pickle
+import cPickle
 from pycocoevalcap.bleu.bleu import Bleu
 from pycocoevalcap.meteor.meteor import Meteor
 from pycocoevalcap.rouge.rouge import Rouge
@@ -25,7 +25,7 @@ for noun in sentiscore.noun_to_senti:
 def sentence_has_anp(sentence):
     words = sentence
     found = False
-    for wi in range(len(words) - 1):
+    for wi in xrange(len(words) - 1):
         w1 = wnl.lemmatize(words[wi])
         w2 = wnl.lemmatize(words[wi + 1])
         if (w1, w2) in anp_list:
@@ -38,7 +38,7 @@ def calculate_metric(rnn, meteor=None):
     res = {}
     lp_avg = 0.0
     lp_c = 0
-    for idx in range(rnn.V_valid.shape[0]):
+    for idx in xrange(rnn.V_valid.shape[0]):
         iid = rnn.Id_valid[idx]
         if iid not in gts: gts[iid] = []
         #gts[iid].append(' '.join([rnn.dp.i2w[w] for w in rnn.X_valid[idx] if w != 0][::-1]))
@@ -54,7 +54,7 @@ def calculate_metric(rnn, meteor=None):
                                            senti=1.0,
                                            beam_size=1)
         pos_sen = pos_sen[:-1]
-        print(' '.join(pos_sen[::-1]))
+        print ' '.join(pos_sen[::-1])
         res[iid].append(' '.join(pos_sen[::-1]))
         lp_avg += np.exp(lp)
         lp_c += 1
@@ -62,21 +62,21 @@ def calculate_metric(rnn, meteor=None):
     return lp_avg
 
     bleu = Bleu()
-    print("Bleu:")
-    print("Positive:", bleu.compute_score(gts, res)[0])
+    print "Bleu:"
+    print "Positive:", bleu.compute_score(gts, res)[0]
     rouge = Rouge()
-    print("Rouge:")
-    print("Positive:", rouge.compute_score(gts, res)[0])
+    print "Rouge:"
+    print "Positive:", rouge.compute_score(gts, res)[0]
     if meteor is None:
         meteor = Meteor()
-    print("Meteor:")
+    print "Meteor:"
     mscore = meteor.compute_score(gts, res)[0]
-    print("Positive:", mscore)
+    print "Positive:", mscore
     return mscore
 
 
 def do_replace_adj(sentence):
-    tokens = nlp(str(' '.join(sentence)))
+    tokens = nlp(unicode(' '.join(sentence)))
     out_tokens = []
     for t in tokens:
         if t.pos == spacy.parts_of_speech.ADJ:
@@ -98,7 +98,7 @@ def run_load_gap_filler(pretrained_filename,
     rnn.conf['VAL_SPLIT'] = RNNDataProvider.TEST
 
     if get_human:
-        id_to_caps = pickle.load(open("coco_mturk/id_to_caps.pik", "rb"))
+        id_to_caps = cPickle.load(open("coco_mturk/id_to_caps.pik", "rb"))
 
     rnn.build_model_core()
     rnn.load_val_dataset()
@@ -131,7 +131,7 @@ def run_load_gap_filler(pretrained_filename,
         new_words = set()
     num_ignore = 0
     num_not_ignore = 0
-    for idx in range(rnn.V_valid.shape[0]):
+    for idx in xrange(rnn.V_valid.shape[0]):
         img_file = rnn.dp.img_id_to_filename[rnn.Id_valid[idx]]
         img_id = rnn.Id_valid[idx]
         if img_id not in id_to_sentences: id_to_sentences[img_id] = []
@@ -147,9 +147,9 @@ def run_load_gap_filler(pretrained_filename,
                 for i in rnn.dp.img_id_to_tokens[img_id]
             ]
             np.random.shuffle(id_to_sentences[img_id])
-            print(len(id_to_sentences[img_id]))
+            print len(id_to_sentences[img_id])
             human_sen_pos = id_to_sentences[img_id].pop()
-            print(len(id_to_sentences[img_id]))
+            print len(id_to_sentences[img_id])
             if not id_to_sentences[img_id]: continue
         else:
             id_to_sentences[img_id] = [
@@ -212,17 +212,17 @@ def run_load_gap_filler(pretrained_filename,
                 out = "<font style='background-color: %s'>%s</font>" % (col, vv)
             new_pos_sen.append(out)
         pos_sen = new_pos_sen
-        print(pos_sen)
-        print(pos_att)
-        print(des_sen)
+        print pos_sen
+        print pos_att
+        print des_sen
         print_it = False
         for v in pos_sen:
             if v in new_words:
                 print_it = True
         if print_it:
             for x in zip(pos_sen, pos_att)[::-1]:
-                print(x[0], end=' ')
-            print("")
+                print x[0],
+            print ""
         #for x in zip(pos_sen, pos_att)[::-1]:
         #    print x[0],
         #print ""
@@ -246,21 +246,21 @@ def run_load_gap_filler(pretrained_filename,
         'img_files': img_files,
         'img_ids': img_ids
     }
-    pickle.dump(output,
+    cPickle.dump(output,
                  open("output_data/sen_att_pos_01.pik", "wb"),
                  protocol=2)
 
     if must_have_anp:
-        print("Must have ANP % removed:", num_ignore / float(
-            num_not_ignore) * 100.0)
+        print "Must have ANP % removed:", num_ignore / float(
+            num_not_ignore) * 100.0
 
-    print("getting Positive perplexity")
-    print(rnn.get_val_perplexity())
-    print("got perplexity")
+    print "getting Positive perplexity"
+    print rnn.get_val_perplexity()
+    print "got perplexity"
 
-    print("getting Descriptive perplexity")
-    print(rnn.get_val_perplexity(base=True))
-    print("got perplexity")
+    print "getting Descriptive perplexity"
+    print rnn.get_val_perplexity(base=True)
+    print "got perplexity"
 
     gts = {}
     res = {}
@@ -279,7 +279,7 @@ def run_load_gap_filler(pretrained_filename,
         res_des[iid].append(' '.join(line))
     fout.close()
 
-    for i in range(3):
+    for i in xrange(3):
         fout = open("eval/reference%d" % i, "w")
         for cid in img_ids:
             if cid not in gts: gts[cid] = []
@@ -297,24 +297,24 @@ def run_load_gap_filler(pretrained_filename,
     #    print res[i]
     #    print ""
     total_ref_sentences = 0
-    for i in list(gts.keys()):
+    for i in gts.keys():
         total_ref_sentences += len(gts[i])
-    print("Total ref sentences:", total_ref_sentences)
-    print("Bleu:")
-    print("Positive:", bleu.compute_score(gts, res)[0])
-    print("Descriptive:", bleu.compute_score(gts, res_des)[0])
+    print "Total ref sentences:", total_ref_sentences
+    print "Bleu:"
+    print "Positive:", bleu.compute_score(gts, res)[0]
+    print "Descriptive:", bleu.compute_score(gts, res_des)[0]
     rouge = Rouge()
-    print("Rouge:")
-    print("Positive:", rouge.compute_score(gts, res)[0])
-    print("Descriptive:", rouge.compute_score(gts, res_des)[0])
+    print "Rouge:"
+    print "Positive:", rouge.compute_score(gts, res)[0]
+    print "Descriptive:", rouge.compute_score(gts, res_des)[0]
     cider = Cider()
-    print("Cider:")
-    print("Positive:", cider.compute_score(gts, res)[0])
-    print("Descriptive:", cider.compute_score(gts, res_des)[0])
+    print "Cider:"
+    print "Positive:", cider.compute_score(gts, res)[0]
+    print "Descriptive:", cider.compute_score(gts, res_des)[0]
     meteor = Meteor()
-    print("Meteor:")
-    print("Positive:", meteor.compute_score(gts, res)[0])
-    print("Descriptive:", meteor.compute_score(gts, res_des)[0])
+    print "Meteor:"
+    print "Positive:", meteor.compute_score(gts, res)[0]
+    print "Descriptive:", meteor.compute_score(gts, res_des)[0]
 
 
 def run_train_gap_filler(lambda_n=0.25,
@@ -375,45 +375,45 @@ def run_train_gap_filler(lambda_n=0.25,
     rnn.build_sentence_generator()
 
     rnn.build_perplexity_calculator()
-    print("getting perplexity")
-    print(rnn.get_val_perplexity())
-    print("got perplexity")
+    print "getting perplexity"
+    print rnn.get_val_perplexity()
+    print "got perplexity"
     #sys.exit(0)
 
     rnn.build_model_trainer()
 
     def iter_callback(rnn, num_epoch):
-        print(num_epoch)
+        print num_epoch
         return
-        for i in range(10):
+        for i in xrange(10):
             idx = np.random.randint(rnn.V_valid.shape[0])
-            print("Orig:", end=' ')
+            print "Orig:",
             sen, att = rnn.get_sentence(rnn.V_valid[idx],
                                         senti=np.array(
                                             [-1.0], dtype=theano.config.floatX))
             for x in zip(sen, att)[::-1]:
-                print(x[0], end=' ')
-            print("")
-            print("Sen+:", end=' ')
+                print x[0],
+            print ""
+            print "Sen+:",
             sen, att = rnn.get_sentence(rnn.V_valid[idx],
                                         senti=np.array(
                                             [1.0], dtype=theano.config.floatX))
             for x in zip(sen, att)[::-1]:
-                print(x[0], end=' ')
-            print("")
-            print("Sen+:", end=' ')
+                print x[0],
+            print ""
+            print "Sen+:",
             sen, att = rnn.get_sentence(rnn.V_valid[idx],
                                         senti=np.array(
                                             [1.0], dtype=theano.config.floatX))
             for x in zip(sen, att)[::-1]:
-                print("%s_%.2f" % (x[0], np.exp(x[1])), end=' ')
-            print("")
+                print "%s_%.2f" % (x[0], np.exp(x[1])),
+            print ""
             #print "Sen-:",
             #sen, att = rnn.get_sentence(rnn.V_valid[idx], senti=np.array([0.0], dtype=theano.config.floatX))
             #for x in zip(sen, att)[::-1]:
             #print "(%s, %.3f)" % (x[0], x[1]),
             #    print x[0],
-            print("\n")
+            print "\n"
 
     best_ppl = 1000
     fail_count = 15
@@ -425,7 +425,7 @@ def run_train_gap_filler(lambda_n=0.25,
     def epoch_callback(rnn, num_epoch, epoch_args):
         ppl = rnn.get_val_perplexity()
         #ppl = -calculate_metric(rnn, meteor = epoch_args['meteor'])
-        print("PPL: %f" % ppl)
+        print "PPL: %f" % ppl
         if ppl < epoch_args['best_ppl']:
             epoch_args['fail_count'] = 15
             epoch_args['best_ppl'] = ppl
@@ -439,7 +439,7 @@ def run_train_gap_filler(lambda_n=0.25,
         if epoch_args['fail_count'] == 0:
             return epoch_args['best_ppl']
 
-    print(rnn.sample_sentence(rnn.V_valid[0]))
+    print rnn.sample_sentence(rnn.V_valid[0])
     best_ppl = rnn.train_complete(iter_cb_freq=5,
                                   iter_callback=iter_callback,
                                   epoch_callback=epoch_callback,
@@ -473,7 +473,7 @@ def main():
                                          domain_adapt=DA_SIMILAR_PARAM_2,
                                          similar_param_reg=3**0,
                                          style_mode=args.style_mode)
-        print("PPL Final:" + ppl_final)
+        print "PPL Final:" + ppl_final
 
         #print "PPL Final:", run_train_gap_filler(lambda_n=0.0697021, lambda_gam=np.exp(-0.640564))
         #print "PPL Final:", run_train_gap_filler(lambda_n=0.0697021, lambda_gam=np.exp(-0.640564), domain_adapt=DA_FIXED_ALPHA, fixed_alpha=0.45)

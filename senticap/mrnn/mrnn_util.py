@@ -8,13 +8,13 @@ def get_dictionary_a_to_b(w2i_a, i2w_a, w2i_b, i2w_b):
     a2b = {}
     a2b_vec = np.zeros((len(i2w_a),), dtype=np.int32)
     a2b_mask = np.zeros((len(i2w_a),), dtype=np.int32)
-    for i, w in i2w_a.items():
+    for i, w in list(i2w_a.items()):
         if w in w2i_b:
             a2b[i] = w2i_b[w]
             a2b_vec[i] = w2i_b[w]
             a2b_mask[i] = 1
 
-    b2a = dict([(i2, i1) for i1, i2 in a2b.items()])
+    b2a = dict([(i2, i1) for i1, i2 in list(a2b.items())])
     return a2b, a2b_vec, a2b_mask, b2a
 
 
@@ -131,7 +131,7 @@ def save_captions_json(filename, img_files, captions):
         example['captions'] = capts
 
         data['images'].append(example)
-    print data
+    print(data)
     json.dump(data, open(filename, "w"))
 
 
@@ -149,5 +149,5 @@ def save_captions_annotated_json(filename, img_files, captions, annotations,
         example['orig'] = orig
 
         data['images'].append(example)
-    print data
+    print(data)
     json.dump(data, open(filename, "w"))

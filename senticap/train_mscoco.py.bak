@@ -43,15 +43,15 @@ rnn.build_model_trainer()
 
 
 def iter_callback(rnn, num_epoch):
-    print(num_epoch)
-    for i in range(10):
+    print num_epoch
+    for i in xrange(10):
         idx = np.random.randint(rnn.V_valid.shape[0])
-        print(rnn.get_sentence(rnn.V_valid[idx]))  #np.zeros((1,)))
+        print rnn.get_sentence(rnn.V_valid[idx])  #np.zeros((1,)))
 
 
 def epoch_callback(rnn, num_epoch):
     rnn.save_model("saved_models/saved_model_mscoco_new_%d.pik" % num_epoch)
-    print("PPL: %f" % rnn.get_val_perplexity())
+    print "PPL: %f" % rnn.get_val_perplexity()
 
 
 rnn.train_complete(iter_cb_freq=10,

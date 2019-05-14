@@ -29,8 +29,8 @@ def get_sgd_weight_updates(method, grads, learnable_params, hist_grad,
         ]
 
         weight_updates = [(p, p + d) for p, d in zip(learnable_params, deltas)]
-        weight_updates += zip(hist_grad, grad_sq_new)
-        weight_updates += zip(delta_grad, deltas_sq_new)
+        weight_updates += list(zip(hist_grad, grad_sq_new))
+        weight_updates += list(zip(delta_grad, deltas_sq_new))
     elif method == RMSPROP:
         decay = T.constant(kwargs["decay"],
                            name="decay",
@@ -46,6 +46,6 @@ def get_sgd_weight_updates(method, grads, learnable_params, hist_grad,
         dx = [(learning_rate * g) / T.sqrt(sc + ff)
               for sc, g in zip(step_cache, comp_grads)]
         weight_updates = [(p, p - d) for p, d in zip(learnable_params, dx)]
-        weight_updates += zip(hist_grad, step_cache)
+        weight_updates += list(zip(hist_grad, step_cache))
 
     return weight_updates

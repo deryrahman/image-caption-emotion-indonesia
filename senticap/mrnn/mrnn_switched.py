@@ -5,11 +5,11 @@ import theano
 from theano.ifelse import ifelse
 import theano.tensor as T
 # import sys
-import cPickle
+import pickle
 # from sklearn.decomposition import TruncatedSVD
 # from sklearn.preprocessing import StandardScaler, Normalizer
 # from nltk.corpus import brown
-from mrnn_solver import RMSPROP
+from .mrnn_solver import RMSPROP
 # import matplotlib.pyplot as plt
 # import string
 # import scipy.io
@@ -17,9 +17,9 @@ from mrnn_solver import RMSPROP
 import copy
 import mkl
 import spacy
-from mrnn_util import get_dictionary_a_to_b, make_drop_mask, build_len_masks, grad_clip, init_layer_xavier_1, \
+from .mrnn_util import get_dictionary_a_to_b, make_drop_mask, build_len_masks, grad_clip, init_layer_xavier_1, \
     init_layer_k
-from mrnn_io import RNNDataProvider
+from .mrnn_io import RNNDataProvider
 sys.setrecursionlimit(50000)
 mkl.set_num_threads(6)
 
@@ -34,8 +34,8 @@ class ClosestWordFinder:
         self.nlp = spacy.load('en_core_web_lg')
         word_vecs = []
         word_to_i = []
-        for w, i in w2i.items():
-            v = self.nlp.vocab[unicode(w)].vector
+        for w, i in list(w2i.items()):
+            v = self.nlp.vocab[str(w)].vector
             word_vecs.append(v)
             word_to_i.append(i)
         word_vecs = np.array(word_vecs).T
@@ -48,10 +48,10 @@ class ClosestWordFinder:
         if chosen_word in self.w2i:
             return self.w2i[chosen_word]
 
-        v = self.nlp.vocab[unicode(chosen_word)].vector
+        v = self.nlp.vocab[str(chosen_word)].vector
         i = np.dot(v, self.word_vecs).argmax()
-        i2w = dict([(w[1], w[0]) for w in self.w2i.items()])
-        print chosen_word, i2w[self.word_to_i[i]]
+        i2w = dict([(w[1], w[0]) for w in list(self.w2i.items())])
+        print(chosen_word, i2w[self.word_to_i[i]])
         return self.word_to_i[i]
 
 
@@ -192,7 +192,7 @@ class RNNModel:
 
         self.model = model
         if conf_new is not None:
-            for k, v in conf_new.items():
+            for k, v in list(conf_new.items()):
                 conf[k] = v
 
         self.conf = conf
@@ -234,10 +234,10 @@ class RNNModel:
                 self.model['delta_grad'][p] = self.delta_grad[idx].get_value(
                     borrow=True)
 
-        cPickle.dump((self.conf, self.model), open(filename, "wb"), protocol=2)
+        pickle.dump((self.conf, self.model), open(filename, "wb"), protocol=2)
 
     def build_shared_layers(self, layers):
-        for name, data in layers.items():
+        for name, data in list(layers.items()):
             setattr(self, name, theano.shared(name=name,
                                               value=data,
                                               borrow=True))
@@ -246,11 +246,11 @@ class RNNModel:
         self.__init__()
         self.loaded_model = True
 
-        conf_new, self.model = cPickle.load(open(filename, "rb"))
-        for k, v in conf_new.items():
+        conf_new, self.model = pickle.load(open(filename, "rb"))
+        for k, v in list(conf_new.items()):
             self.conf[k] = v
         if conf is not None:
-            for k, v in conf.items():
+            for k, v in list(conf.items()):
                 self.conf[k] = v
 
         shared_layers = self.model['params_saved']
@@ -356,8 +356,8 @@ class RNNModel:
     def convert_X_to_lm_vocab(self, X):
         X_lm = np.zeros_like(X)
         last_tok = 1
-        for r in xrange(X_lm.shape[0]):
-            for c in xrange(X_lm.shape[1]):
+        for r in range(X_lm.shape[0]):
+            for c in range(X_lm.shape[1]):
                 if X[r, c] in self.mm2lm_map:
                     X_lm[r, c] = self.mm2lm_map[X[r, c]]
                     if X_lm[r, c] != 0:
@@ -371,9 +371,9 @@ class RNNModel:
 
     def fill_extra_SW(self, SW):
         return
-        for r in xrange(SW.shape[0]):
+        for r in range(SW.shape[0]):
             change_pos = []
-            for c in xrange(0, SW.shape[1]):
+            for c in range(0, SW.shape[1]):
                 if SW[r, c] == 1:
                     change_pos.append(c)
             for c in change_pos:
@@ -389,11 +389,11 @@ class RNNModel:
             self.dp.build_vocab(self.conf['MIN_WORD_FREQ'])
             # i2w_new = self.dp.i2w
             w2i_new = self.dp.w2i
-            print "Old len:", len(i2w_old)
+            print("Old len:", len(i2w_old))
 
             new_words = set(w2i_new.keys()) - set(w2i_old.keys())
-            cur_idx = np.amax(i2w_old.keys()) + 1
-            print len(new_words)
+            cur_idx = np.amax(list(i2w_old.keys())) + 1
+            print(len(new_words))
 
             self.conf['added_words'] = []
 
@@ -429,12 +429,12 @@ class RNNModel:
         #expand out the ones in the switch array
         #self.fill_extra_SW(self.SW_train)
 
-        for i in xrange(10):
-            print self.SW_train[i]
-            print self.senti_train[i]
+        for i in range(10):
+            print(self.SW_train[i])
+            print(self.senti_train[i])
             for w, sw in zip(self.X_train[i], self.SW_train[i]):
-                print "%s_%d" % (self.model['i2w'][w], sw),
-            print "\n"
+                print("%s_%d" % (self.model['i2w'][w], sw), end=' ')
+            print("\n")
         #sys.exit(0)
 
         if self.conf['JOINED_MODEL']:
@@ -883,7 +883,7 @@ class RNNModel:
 
             #the predicted word
             w_idx = T.cast(T.argmax(s_t, axis=1), dtype='int32')[0]
-            print hh.ndim, h_tm1_hidden.ndim
+            print(hh.ndim, h_tm1_hidden.ndim)
 
             return [hh, cc, s_t[0], w_idx, T.zeros((0,), dtype='int32')[0], att]
 
@@ -925,7 +925,7 @@ class RNNModel:
         #build the un-forced loop
         h0_hidden_matrix = self.h0_hidden * T.ones((2, self.h0_hidden.shape[0]))
         h0_cell_matrix = self.h0_cell * T.ones((2, self.h0_cell.shape[0]))
-        print h0_hidden_matrix.ndim
+        print(h0_hidden_matrix.ndim)
 
         [_, _ , _ , self.wout_fb, _, self.att_gen], _ = theano.scan(fn=recurrance_word_feedback,
                                      non_sequences=[self.v_single, self.senti],
@@ -1026,8 +1026,8 @@ class RNNModel:
         self.Y_sh_train_drop = theano.shared(name="Y_sh_train_drop",value=self.Y_train_drop, borrow=True)
         if self.conf['JOINED_MODEL']:
             self.X_sh_train_lm = theano.shared(name="X_sh_train_lm",value=self.X_train_lm, borrow=True)
-        print self.SW_sh_train.get_value()
-        print self.SW_sh_train.get_value().shape
+        print(self.SW_sh_train.get_value())
+        print(self.SW_sh_train.get_value().shape)
 
         params_train = [getattr(self, p) for p in self.conf['param_names_trainable']]
 
@@ -1049,13 +1049,13 @@ class RNNModel:
         regatt = T.constant(self.conf['ATT_REG_CONST'], dtype=theano.config.floatX)
         #self.cost = self.loss + regc * np.sum(map(lambda xx: (xx ** 2).sum(), params_train)) + regatt*(T.mean(self.att))
         if self.conf['DOMAIN_ADAPT'] == DA_SUM:
-            self.cost = self.loss + regc * np.sum(map(lambda xx: (xx ** 2).sum(), params_train))
+            self.cost = self.loss + regc * np.sum([(xx ** 2).sum() for xx in params_train])
         elif self.conf['DOMAIN_ADAPT'] == DA_FIXED_ALPHA:
-            self.cost = self.loss + regc * np.sum(map(lambda xx: (xx ** 2).sum(), params_train))
+            self.cost = self.loss + regc * np.sum([(xx ** 2).sum() for xx in params_train])
         elif self.conf['DOMAIN_ADAPT'] == DA_SIMILAR_PARAM or self.conf['DOMAIN_ADAPT'] == DA_SIMILAR_PARAM_2 or self.conf['DOMAIN_ADAPT'] == DA_SIMILAR_PARAM_3:
             l2 = lambda x: (x ** 2).sum()
             reg_term = self.conf['SIMILAR_PARAM_REG'] * (l2(self.w - self.w_sw) + l2(self.b - self.b_sw) + l2(self.w_lstm - self.w_lstm_sw) + l2(self.wvm_sw - self.wvm) + l2(self.bmv_sw - self.bmv))
-            loss_term = self.loss + regc * np.sum(map(lambda xx: (xx ** 2).sum(), params_train))
+            loss_term = self.loss + regc * np.sum([(xx ** 2).sum() for xx in params_train])
             reg_term = theano.printing.Print("reg_term")(reg_term)
             loss_term = theano.printing.Print("loss_term")(loss_term)
             self.cost = loss_term + reg_term
@@ -1069,7 +1069,7 @@ class RNNModel:
         comp_grads = [self.neg_sgd * g*m if m is not None else g for g,m in zip(comp_grads, params_bp_mask) ]
         weight_updates = get_sgd_weight_updates(self.conf['GRAD_METHOD'], comp_grads, params_train, self.hist_grad, self.delta_grad,
                                         decay=self.conf['DECAY_RATE'], learning_rate=self.conf['LEARNING_RATE'], rho=self.conf['RHO_ADADELTA'])
-        print weight_updates
+        print(weight_updates)
 
         indx = T.iscalar("indx")
         indx_wrap = indx % (self.X_sh_train_drop.shape[0] - self.conf['batch_size_val'])
@@ -1211,7 +1211,7 @@ class RNNModel:
             else:
                 tr = self.train(cur_idx)
                 #tr2 = self.train_neg(cur_idx)
-            print tr, num_iter * batch_size_val / float(num_train_examples)
+            print(tr, num_iter * batch_size_val / float(num_train_examples))
             #print tr2, num_iter * batch_size_val / float(num_train_examples)
 
             if iter_cb_freq != 0 and iter_callback is not None and num_iter % iter_cb_freq == 0:
@@ -1229,7 +1229,7 @@ class RNNModel:
         if self.X_valid.shape[0] % batch_size_val != 0: num_batches+=1
         ppl_v_total = 0.0
         ppl_n_total = 0.0
-        for i in xrange(num_batches):
+        for i in range(num_batches):
             ii = i * batch_size_val
             if self.conf['JOINED_MODEL']:
                 cv_X = self.convert_X_to_lm_vocab(self.X_valid[ii:ii+batch_size_val])
@@ -1309,7 +1309,7 @@ class RNNModel:
     def sample_sentence(self, v):
         sentence = []
         last_step = None
-        for i in xrange(self.conf['MAX_SENTENCE_LEN'] + 1):
+        for i in range(self.conf['MAX_SENTENCE_LEN'] + 1):
             last_step = self.do_one_step(v, last_step)
             c = np.arange(last_step['s_t'][0].shape[0])
             p = np.array(last_step['s_t'][0], dtype=np.float64)
@@ -1344,9 +1344,9 @@ def main():
 
     rnn.build_model_trainer()
     def iter_callback(rnn, epoch):
-        print "Epoch: %f" % epoch
-        for i in xrange(10):
-            print rnn.get_sentence(rnn.V_valid[np.random.randint(rnn.V_valid.shape[0])])#np.zeros((1,)))
+        print("Epoch: %f" % epoch)
+        for i in range(10):
+            print(rnn.get_sentence(rnn.V_valid[np.random.randint(rnn.V_valid.shape[0])]))#np.zeros((1,)))
 
     def epoch_callback(rnn, num_epoch):
         rnn.save_model("saved_model_test_%d.pik" % num_epoch)

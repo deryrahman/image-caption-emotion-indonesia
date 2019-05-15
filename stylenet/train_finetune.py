@@ -22,7 +22,6 @@ def main(args):
     crop_size = args.crop_size
     vocab_path = args.vocab_path
     num_workers = args.num_workers
-    train_mode = args.train_mode
 
     image_dir = args.image_dir
     caption_path = args.caption_path
@@ -67,44 +66,27 @@ def main(args):
                              caption_batch_size,
                              shuffle=True,
                              num_workers=num_workers)
-    if train_mode == 'supervised':
-        happy_data_loader = get_loader(image_dir,
-                                       happy_path,
-                                       vocab,
-                                       transform,
-                                       language_batch_size,
-                                       shuffle=True,
-                                       num_workers=num_workers)
-        sad_data_loader = get_loader(image_dir,
-                                     sad_path,
-                                     vocab,
-                                     transform,
-                                     language_batch_size,
-                                     shuffle=True,
-                                     num_workers=num_workers)
-        angry_data_loader = get_loader(image_dir,
-                                       angry_path,
-                                       vocab,
-                                       transform,
-                                       language_batch_size,
-                                       shuffle=True,
-                                       num_workers=num_workers)
-    else:
-        happy_data_loader = get_style_loader(happy_path,
-                                             vocab,
-                                             language_batch_size,
-                                             shuffle=True,
-                                             num_workers=num_workers)
-        sad_data_loader = get_style_loader(sad_path,
-                                           vocab,
-                                           language_batch_size,
-                                           shuffle=True,
-                                           num_workers=num_workers)
-        angry_data_loader = get_style_loader(angry_path,
-                                             vocab,
-                                             language_batch_size,
-                                             shuffle=True,
-                                             num_workers=num_workers)
+    happy_data_loader = get_loader(image_dir,
+                                   happy_path,
+                                   vocab,
+                                   transform,
+                                   language_batch_size,
+                                   shuffle=True,
+                                   num_workers=num_workers)
+    sad_data_loader = get_loader(image_dir,
+                                 sad_path,
+                                 vocab,
+                                 transform,
+                                 language_batch_size,
+                                 shuffle=True,
+                                 num_workers=num_workers)
+    angry_data_loader = get_loader(image_dir,
+                                   angry_path,
+                                   vocab,
+                                   transform,
+                                   language_batch_size,
+                                   shuffle=True,
+                                   num_workers=num_workers)
 
     # Build the models
     encoder = EncoderCNN(embed_size).to(device)
@@ -157,51 +139,28 @@ def main(args):
         steps = [happy_step, sad_step, angry_step]
 
         for j in random.sample([i for i in range(len(tags))], len(tags)):
-            if train_mode == 'supervised':
-                for i, (images, captions,
-                        lengths) in enumerate(data_loaders[j]):
-                    # Set mini-batch dataset
-                    images = images.to(device)
-                    captions = captions.to(device)
-                    targets = pack_padded_sequence(input=captions,
-                                                   lengths=lengths,
-                                                   batch_first=True)[0]
-                    # Forward, backward and optimize
-                    features = encoder(images)
-                    outputs = decoder(captions, lengths, features, mode=tags[j])
-                    loss = criterion(outputs, targets)
-                    decoder.zero_grad()
-                    # encoder.zero_grad()
-                    loss.backward()
-                    lang_optimizer.step()
+            for i, (images, captions, lengths) in enumerate(data_loaders[j]):
+                # Set mini-batch dataset
+                images = images.to(device)
+                captions = captions.to(device)
+                targets = pack_padded_sequence(input=captions,
+                                               lengths=lengths,
+                                               batch_first=True)[0]
+                # Forward, backward and optimize
+                features = encoder(images)
+                outputs = decoder(captions, lengths, features, mode=tags[j])
+                loss = criterion(outputs, targets)
+                decoder.zero_grad()
+                # encoder.zero_grad()
+                loss.backward()
+                lang_optimizer.step()
 
-                    # Print log info
-                    if i % 5 == 0:
-                        print(
-                            'Epoch [{}/{}], [{}], Step [{}/{}], Loss: {:.4f}, Perplexity: {:5.4f}'
-                            .format(epoch, num_epochs, tags[j][:3].upper(), i,
-                                    steps[j], loss.item(), np.exp(loss.item())))
-            else:
-                for i, (captions, lengths) in enumerate(data_loaders[j]):
-                    # Set mini-batch dataset
-                    captions = captions.to(device)
-                    lengths = [l - 1 for l in lengths]
-                    targets = pack_padded_sequence(input=captions[:, 1:],
-                                                   lengths=lengths,
-                                                   batch_first=True)[0]
-                    # Forward, backward and optimize
-                    outputs = decoder(captions[:, :-1], lengths, mode=tags[j])
-                    loss = criterion(outputs, targets)
-                    decoder.zero_grad()
-                    loss.backward()
-                    lang_optimizer.step()
-
-                    # Print log info
-                    if i % 5 == 0:
-                        print(
-                            'Epoch [{}/{}], [{}], Step [{}/{}], Loss: {:.4f}, Perplexity: {:5.4f}'
-                            .format(epoch, num_epochs, tags[j][:3].upper(), i,
-                                    steps[j], loss.item(), np.exp(loss.item())))
+                # Print log info
+                if i % 5 == 0:
+                    print(
+                        'Epoch [{}/{}], [{}], Step [{}/{}], Loss: {:.4f}, Perplexity: {:5.4f}'
+                        .format(epoch, num_epochs, tags[j][:3].upper(), i,
+                                steps[j], loss.item(), np.exp(loss.item())))
 
         # Save the model checkpoints
         torch.save(
@@ -242,10 +201,6 @@ if __name__ == '__main__':
                         type=str,
                         default='data/flickr8k_id/val.txt',
                         help='path for val txt file')
-    parser.add_argument('--train_mode',
-                        type=str,
-                        default='supervised',
-                        help='training style mode, supervised or unsupervised')
     parser.add_argument('--happy_path',
                         type=str,
                         default='data/flickr8k_id/happy/train_supervised.txt',

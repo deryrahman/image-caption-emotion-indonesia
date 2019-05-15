@@ -10,9 +10,9 @@ DO_NEG = False
 
 
 def parse_word(w):
-    w = w.encode('utf-8')
+    #w = w.encode('utf-8')
     w = str.lower(w)
-    w = w.translate(string.maketrans("", ""), string.punctuation)
+    w = w.translate(str.maketrans("", "", string.punctuation))
     return w
 
 
@@ -22,7 +22,7 @@ def pad_vector(vec, max_pad_len):
     return vv
 
 
-#turn a list of lists into a numpy array padded with zeros
+# turn a list of lists into a numpy array padded with zeros
 def pad_vectors(vals, max_pad_len):
     r = []
     for v in vals:
@@ -65,7 +65,7 @@ class RNNDataProvider:
         data = pickle.load(open(self.DATASET_FILE_DATA, 'r'))
         np.random.seed(1234)
         np.random.shuffle(data)
-        #np.random.seed()
+        # np.random.seed()
         train_part = (len(data) / 10) * 8
 
         self.tok_to_feat = []
@@ -105,7 +105,7 @@ class RNNDataProvider:
                 num_tok += 1
         print("Sentences: ", len(self.tokens))
 
-    #read the dataset
+    # read the dataset
     def read_dataset_mm(self):
         self.loaded = True
         self.tokens = []
@@ -147,7 +147,7 @@ class RNNDataProvider:
                     self.feat_to_tok[i].append(num_tok)
                     num_tok += 1
 
-    #read the dataset
+    # read the dataset
     def read_dataset_mm_extra(self, max_size=10000):
         self.loaded = True
         self.tokens = []
@@ -336,7 +336,7 @@ class RNNDataProvider:
             self.DATASET_FILE_DATA = "./yfcc100m/yahoo_100m_saved_sentences.pik"
             self.read_dataset = self.read_dataset_lm
 
-    #read the context features
+    # read the context features
     def read_context(self):
         if self.DATASET_FILE_FEATURES:
             self.feats = scipy.io.loadmat(self.DATASET_FILE_FEATURES)["feats"]
@@ -345,7 +345,7 @@ class RNNDataProvider:
             self.feats = np.zeros((len(self.tokens), 1),
                                   dtype=theano.config.floatX)
 
-    #count the number of times each word occurs in the dataset
+    # count the number of times each word occurs in the dataset
     def get_word_counts(self, data_split, source="tokens"):
         # data_source = []
         # if source == "tokens":
@@ -366,7 +366,7 @@ class RNNDataProvider:
                 w_count[w] += 1
         return w_count
 
-    #build a vocabulary from the training data
+    # build a vocabulary from the training data
     def build_vocab(self, min_freq, source="tokens"):
         w_count = self.get_word_counts(self.TRAIN, source)
 
@@ -383,7 +383,7 @@ class RNNDataProvider:
         self.w2i = w2idx
         self.i2w = dict([(v[1], v[0]) for v in list(w2idx.items())])
 
-    #represent a sentences as indices from the vocabulary
+    # represent a sentences as indices from the vocabulary
     def tokenize_sentence(self, sentence):
         stok = []
         used = []
@@ -393,7 +393,7 @@ class RNNDataProvider:
                 used.append(i)
         return stok, np.array(used)
 
-    #get each of the data splits
+    # get each of the data splits
     def get_data_split(self,
                        data_split,
                        randomize=False,
@@ -429,16 +429,16 @@ class RNNDataProvider:
                     if np.any(used == pos_pos) and anp_pos_new < pad_len:
                         pos_vec[anp_pos_new] = 1
 
-                #print self.senti_words[i]
-                #print tok, pos_vec
-                #for w, pv in zip(tok, pos_vec):
+                # print self.senti_words[i]
+                # print tok, pos_vec
+                # for w, pv in zip(tok, pos_vec):
                 #    print "%s_%d" % (self.i2w[w], pv),
-                #print "\n"
+                # print "\n"
 
-                #if np.random.rand() < 0.01:
+                # if np.random.rand() < 0.01:
                 #    sys.exit(0)
 
-                #if self.sentiment[i] == 0:continue
+                # if self.sentiment[i] == 0:continue
                 anp_sw_pos.append(pos_vec)
                 sentiment.append(np.abs(self.sentiment[i] * 2 - 1))
 

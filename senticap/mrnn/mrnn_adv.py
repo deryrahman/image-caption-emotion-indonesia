@@ -34,36 +34,36 @@ class RNNModel:
         model = {}
         self.loaded_model = False
 
-        #which gradient decent method to use
+        # which gradient decent method to use
         conf['GRAD_METHOD'] = RMSPROP
 
-        #config for each of the gradient decent methods
+        # config for each of the gradient decent methods
         conf['DECAY_RATE'] = 0.99
         conf['LEARNING_RATE'] = 0.001
         conf['RHO_ADADELTA'] = 0.95
 
-        #what regularisation to apply
+        # what regularisation to apply
         conf['L2_REG_CONST'] = 1e-8
         conf['DROP_INPUT_FRACTION'] = 0.5
         conf['DROP_OUTPUT_FRACTION'] = 0.5
         conf['DROP_INPUT'] = True
         conf['DROP_OUTPUT'] = True
 
-        #how much gradient clipping to apply
+        # how much gradient clipping to apply
         conf['GRAD_CLIP_SIZE'] = 5
 
-        #maximum length of a sentence
-        #Note: actually this +1 because of start/end token
+        # maximum length of a sentence
+        # Note: actually this +1 because of start/end token
         conf['MAX_SENTENCE_LEN'] = 20
 
         conf['MIN_WORD_FREQ'] = 5
 
-        #number of sentences per mini-batch
+        # number of sentences per mini-batch
         conf['batch_size_val'] = 200
 
         conf['DATASET'] = RNNDataProvider.FLK8
 
-        #set layer sizes
+        # set layer sizes
         conf['style_len'] = 128
         conf['vis_len'] = 128
         conf['num_styles'] = 10
@@ -99,7 +99,7 @@ class RNNModel:
         self.mm_rnn = mm_rnn
         self.lm_rnn = lm_rnn
 
-        #build conversion from lm dictionary to mm dictionary
+        # build conversion from lm dictionary to mm dictionary
         _, mm2lm, mm2lm_mask, _ = get_dictionary_a_to_b(mm_rnn.model['w2i'],
                                                         mm_rnn.model['i2w'],
                                                         lm_rnn.model['w2i'],
@@ -107,14 +107,15 @@ class RNNModel:
 
         self.mm2lm = mm2lm
 
-        #convert the output of the lm to match the order of the mm (zero out when doesn't exist)
+        # convert the output of the lm to match the order of the mm (zero out when doesn't exist)
         m2l = theano.shared(mm2lm, name="mm2lm", borrow=True)
         m2l_m = theano.shared(mm2lm_mask, name="mm2lm_mask", borrow=True)
         self.lm_new_s = lm_rnn.new_s[:, m2l] * m2l_m
-        self.lm_new_s = self.lm_new_s / self.lm_new_s.sum(axis=1, keepdims=True)
+        self.lm_new_s = self.lm_new_s / \
+            self.lm_new_s.sum(axis=1, keepdims=True)
 
     def save_model(self, filename):
-        #get the model parameters and save them
+        # get the model parameters and save them
         params_saved = dict([(p, getattr(self, p).get_value(borrow=True))
                              for p in self.param_names_saveable])
         self.model['params_saved'] = params_saved
@@ -141,7 +142,7 @@ class RNNModel:
         for k, v in list(conf_new.items()):
             self.conf[k] = v
 
-        #NOTE: backwards compatability only
+        # NOTE: backwards compatability only
         if 'output_size' not in self.conf:
             self.conf['output_size'] = self.conf['vocab_size']
 
@@ -156,7 +157,7 @@ class RNNModel:
             self.delta_grad.append(
                 theano.shared(name="delta_grad[%d]" % i, value=p, borrow=True))
 
-    #dropout masks that do nothing
+    # dropout masks that do nothing
     def make_drop_masks_identity(self, n_instances):
         mX = T.ones((n_instances, self.conf['MAX_SENTENCE_LEN'] + 1,
                      self.conf['emb_size']),
@@ -189,9 +190,9 @@ class RNNModel:
         if not hasattr(self, 'dp'):
             self.dp = RNNDataProvider(self.conf['DATASET'])
         if not self.dp.loaded:
-            #read the sentences
+            # read the sentences
             self.dp.read_dataset()
-            #read the contexts
+            # read the contexts
             self.dp.read_context()
             if not load_vocab:
                 self.dp.w2i = self.model['w2i']
@@ -201,7 +202,7 @@ class RNNModel:
                 self.model['i2w'] = self.dp.i2w
                 self.model['w2i'] = self.dp.w2i
 
-    #change the vocabulary used to define the sentences in X
+    # change the vocabulary used to define the sentences in X
     def convert_X_to_lm_vocab(self, X):
         X_lm = np.zeros_like(X)
         last_tok = 1
@@ -216,11 +217,11 @@ class RNNModel:
         return X_lm
 
     def load_training_dataset(self):
-        #load the dataset into memory
-        #also construct a new vocabulary (saved in self.model['w2i'])
+        # load the dataset into memory
+        # also construct a new vocabulary (saved in self.model['w2i'])
         self.setup_dataprovider(load_vocab=True)
 
-        #get the training dataset split
+        # get the training dataset split
         self.X_train, self.Xlen_train, self.V_train, _ = self.dp.get_data_split(
             data_split=self.conf['TRAIN_SPLIT'],
             randomize=True,
@@ -230,11 +231,11 @@ class RNNModel:
         self.num_train_examples = self.X_train.shape[0]
 
         if self.conf['JOINED_MODEL']:
-            #map from the mm dictionary into the lm dictionary
-            #if no dictionary entry repeat the last one (dont ever repeat START or STOP tokens)
+            # map from the mm dictionary into the lm dictionary
+            # if no dictionary entry repeat the last one (dont ever repeat START or STOP tokens)
             self.X_train_lm = self.convert_X_to_lm_vocab(self.X_train)
 
-        #build the dropout masks
+        # build the dropout masks
         self.make_new_train_drop_masks()
 
         self.conf['vocab_size'] = len(self.model['i2w'])
@@ -251,14 +252,14 @@ class RNNModel:
 
     def build_model_core(self):
 
-        #gradient clipping function
+        # gradient clipping function
         self.clipg = lambda x: grad_clip(x, -self.conf['GRAD_CLIP_SIZE'], self.
                                          conf['GRAD_CLIP_SIZE'])
 
         if not self.loaded_model:
             shared_layers = {}
 
-            #set the default network weights
+            # set the default network weights
             if not hasattr(self, 'style'):
                 style_val = init_layer_k(self.conf['num_styles'],
                                          self.conf['style_len'])
@@ -304,7 +305,7 @@ class RNNModel:
                                        dtype=theano.config.floatX)
                 shared_layers['h0_cell'] = h0_cell_val
 
-            #mapping from visual space to word space
+            # mapping from visual space to word space
             if not hasattr(self, 'wvm'):
                 wvm_val = init_layer_k(self.conf['visual_size'],
                                        self.conf['vis_len'])
@@ -315,13 +316,13 @@ class RNNModel:
                                    dtype=theano.config.floatX)
                 shared_layers['bmv'] = bmv_val
 
-            #LSTM layer parameters
+            # LSTM layer parameters
             if not hasattr(self, 'w_lstm'):
                 w_lstm_val = init_layer_k(self.conf['lstm_hidden_size'] * 2,
                                           self.conf['lstm_hidden_size'] * 4)
                 shared_layers['w_lstm'] = w_lstm_val
 
-            #mapping from RNN hidden output to vocabulary
+            # mapping from RNN hidden output to vocabulary
             if not hasattr(self, 'w'):
                 w_val = init_layer_k(self.conf['lstm_hidden_size'],
                                      self.conf['output_size'])
@@ -331,7 +332,7 @@ class RNNModel:
                 b_val = np.zeros((self.conf['output_size'],),
                                  dtype=theano.config.floatX)
                 if self.conf["INIT_OUTPUT_BIAS"]:
-                    #set the bias on the last layer to be the log prob of each of the words in the vocab
+                    # set the bias on the last layer to be the log prob of each of the words in the vocab
                     wcount = 0
                     w2i = self.dp.w2i
                     w2c = self.dp.get_word_counts(RNNDataProvider.TRAIN)
@@ -349,75 +350,75 @@ class RNNModel:
 
             self.build_shared_layers(shared_layers)
 
-        #remember the important parameters for saving + SGD
+        # remember the important parameters for saving + SGD
         self.param_names_saveable = [
             "wemb", "h0_hidden", "h0_cell", "wvm", "bmv", "w", "b", "w_lstm",
             "style", "wstyle", "wsty_to_img", "bsty_to_img", "wv_to_sty",
             "bv_to_sty"
         ]
 
-        #input variables for training
+        # input variables for training
         self.x = T.imatrix("x")
         self.v = T.matrix("v")
         self.xlen = T.matrix("xlen")
 
         self.style_idx = T.ivector("v")
 
-        #input variables for generation
+        # input variables for generation
         self.v_single = T.vector("v")
         self.nstep = T.iscalar("nstep")
 
-        #the dropout masks
-        #drop the input
+        # the dropout masks
+        # drop the input
         self.x_drop = T.tensor3("x_drop")
-        #drop the output
+        # drop the output
         self.y_drop = T.tensor3("y_drop")
 
-        #hidden layer ouput
+        # hidden layer ouput
         h_tm1 = T.vector("h_tm1")
-        #word indexes
+        # word indexes
         word_t = T.ivector("word_t")
-        #visual information
+        # visual information
         v_i = T.vector("v")
 
-        #Generates the next word based on the: previous true word, hidden state & visual features
-        #inputs: hiddent_layer, last_predicted word, visual features
+        # Generates the next word based on the: previous true word, hidden state & visual features
+        # inputs: hiddent_layer, last_predicted word, visual features
         def recurrance(word_t, x_drop_slice, hh_drop_slice, use_v, h_tm1_hidden,
                        h_tm1_cell, v_i, style_idx):
 
             if word_t.ndim == 0:
                 style_idx = style_idx[0]
 
-            #get the word embedding matrix or the context information
+            # get the word embedding matrix or the context information
             x_t = ifelse(
                 T.eq(use_v, 1),
                 T.concatenate([T.dot(v_i, self.wvm).T, self.style[style_idx].T
-                              ]).T + self.bmv, self.wemb[word_t])
+                               ]).T + self.bmv, self.wemb[word_t])
 
-            #if we are not doing minibatch training
+            # if we are not doing minibatch training
             if word_t.ndim == 0:
                 x_t = x_t.reshape((1, x_t.shape[0]))
                 h_tm1_hidden = h_tm1_hidden.reshape((1, h_tm1_hidden.shape[0]))
 
-            #dropout on the input embddings
+            # dropout on the input embddings
             if self.conf['DROP_INPUT']:
                 x_t *= x_drop_slice
 
-            #clip the gradients so they dont get too large
+            # clip the gradients so they dont get too large
             h_tm1_hidden_clip = self.clipg(h_tm1_hidden)
 
             in_state = T.concatenate([x_t, h_tm1_hidden_clip], axis=1)
 
-            #calculate 8 dot products in one go
+            # calculate 8 dot products in one go
             dot_out = T.dot(in_state, self.w_lstm)
 
             lstm_hidden_size = self.conf['lstm_hidden_size']
-            #input gate
+            # input gate
             ig = T.nnet.sigmoid(dot_out[:, :lstm_hidden_size])
-            #forget gate
+            # forget gate
             fg = T.nnet.sigmoid(dot_out[:, lstm_hidden_size:lstm_hidden_size *
                                         2])
-            #output gate
+            # output gate
             og = T.nnet.sigmoid(dot_out[:, lstm_hidden_size *
                                         2:lstm_hidden_size * 3])
 
@@ -428,25 +429,25 @@ class RNNModel:
             # hidden state
             hh = og * cc
 
-            #drop the output state
+            # drop the output state
             if self.conf['DROP_OUTPUT']:
                 hh = hh * hh_drop_slice
 
-            #the distribution over output words
+            # the distribution over output words
             if self.conf['SOFTMAX_OUT']:
                 s_t = T.nnet.softmax(T.dot(hh, self.w) + self.b)
             else:
                 s_t = T.nnet.sigmoid(T.dot(hh, self.w) + self.b)
 
-            #if we are not doing minibatch training
+            # if we are not doing minibatch training
             if word_t.ndim == 0:
                 hh = hh[0]
                 cc = cc[0]
 
             return [hh, cc, s_t]
 
-        #Generates the next word by feeding the old word as input
-        #inputs: hiddent_layer, last_predicted word, visual features
+        # Generates the next word by feeding the old word as input
+        # inputs: hiddent_layer, last_predicted word, visual features
         def recurrance_word_feedback(h_tm1_hidden, h_tm1_cell, word_t,
                                      use_visual, v_i, style_idx):
             x_drop_val = T.ones((self.conf['emb_size'],),
@@ -457,12 +458,12 @@ class RNNModel:
              s_t] = recurrance(word_t, x_drop_val, y_drop_val, use_visual,
                                h_tm1_hidden, h_tm1_cell, v_i, style_idx)
 
-            #the predicted word
+            # the predicted word
             w_idx = T.cast(T.argmax(s_t, axis=1), dtype='int32')[0]
 
             return [hh, cc, s_t[0], w_idx, T.zeros((0,), dtype='int32')[0]]
 
-        #build the teacher forcing loop
+        # build the teacher forcing loop
         use_visual_info = T.concatenate([
             T.ones((1,), dtype=np.int32),
             T.zeros((self.conf['MAX_SENTENCE_LEN'],), dtype=np.int32)
@@ -487,7 +488,7 @@ class RNNModel:
             non_sequences=[self.v, self.style_idx],
             outputs_info=[h0_hidden_matrix, h0_cell_matrix, None])
 
-        #build the un-forced loop
+        # build the un-forced loop
         [_, _, _, self.wout_fb,
          _], _ = theano.scan(fn=recurrance_word_feedback,
                              non_sequences=[self.v_single, self.style_idx],
@@ -498,8 +499,8 @@ class RNNModel:
                              ],
                              n_steps=self.nstep)
 
-        #TODO: try going from style to image in the batch
-        #try to generate the image features from the style information
+        # TODO: try going from style to image in the batch
+        # try to generate the image features from the style information
 
         if self.conf['MSQ_LOSS']:
             styin = grad_reverse(self.style[self.style_idx])
@@ -518,9 +519,10 @@ class RNNModel:
             msq_diff = None
 
         self.new_s = s.reshape((s.shape[0] * s.shape[1], s.shape[2]))
-        softmax_out = self.build_loss_function(self.new_s, y_adj, self.msq_diff)
+        softmax_out = self.build_loss_function(
+            self.new_s, y_adj, self.msq_diff)
 
-        #calculate the perplexity
+        # calculate the perplexity
         ff_small = T.constant(1e-20, dtype=theano.config.floatX)
         ppl_idx = softmax_out.shape[1] * T.arange(
             softmax_out.shape[0]) + T.flatten(y_adj)
@@ -533,7 +535,7 @@ class RNNModel:
         self.perplexity_batch_v = T.sum(hsum * T.flatten(self.xlen.T))
         self.perplexity_batch_n = T.sum(self.xlen)
 
-        #build the single step code
+        # build the single step code
         h_hid = T.vector("h_hid")
         h_cell = T.vector("h_cell")
         x_drop_val = T.ones((self.conf['emb_size'],),
@@ -549,10 +551,10 @@ class RNNModel:
         new_s = distributions
 
         if self.conf['JOINED_LOSS_FUNCTION']:
-            #note: we need to use the re-ordered output of the lm (ie self.lm_new_s) this accounts
+            # note: we need to use the re-ordered output of the lm (ie self.lm_new_s) this accounts
             # for dictionary differences
             #output_vocab_len = new_s.shape[1] / 2
-            #weighted_results = self.new_s[:, :output_vocab_len] * self.mm_rnn.new_s +
+            # weighted_results = self.new_s[:, :output_vocab_len] * self.mm_rnn.new_s +
             # (1.0 - self.new_s[:, :output_vocab_len]) * self.lm_new_s
             sm_res = self.new_s * self.mm_rnn.new_s + (
                 1.0 - self.new_s) * self.lm_new_s
@@ -563,7 +565,7 @@ class RNNModel:
             self.loss = T.sum(loss_vec)
             return sm_res
         else:
-            #calculate the total loss for this minibatch
+            # calculate the total loss for this minibatch
             loss_vec = T.nnet.categorical_crossentropy(
                 new_s, T.flatten(y_adj)) * T.flatten(self.xlen.T)
             self.loss = T.sum(loss_vec)
@@ -573,7 +575,7 @@ class RNNModel:
 
             return new_s
 
-    #compile the functions needed to train the model
+    # compile the functions needed to train the model
     def build_model_trainer(self):
         self.X_sh_train_mask = theano.shared(name="X_sh_train_mask",
                                              value=self.X_train_mask,
@@ -595,14 +597,14 @@ class RNNModel:
                                                value=self.X_train_lm,
                                                borrow=True)
 
-        #set the parameters we want to train
+        # set the parameters we want to train
         self.param_names_trainable = [
             "wemb", "wvm", "bmv", "w", "b", "w_lstm", "style", "wstyle",
             "wsty_to_img", "bsty_to_img", "wv_to_sty", "bv_to_sty"
         ]
         params_train = [getattr(self, p) for p in self.param_names_trainable]
 
-        #storage for historical gradients
+        # storage for historical gradients
         self.hist_grad = [
             theano.shared(value=np.zeros_like(var.get_value()), borrow=True)
             for var in params_train
@@ -612,18 +614,20 @@ class RNNModel:
             for var in params_train
         ]
 
-        #calculate the cost for this minibatch (add L2 reg to loss function)
-        regc = T.constant(self.conf['L2_REG_CONST'], dtype=theano.config.floatX)
+        # calculate the cost for this minibatch (add L2 reg to loss function)
+        regc = T.constant(self.conf['L2_REG_CONST'],
+                          dtype=theano.config.floatX)
         self.cost = self.loss + regc * np.sum([(xx**2).sum()
                                                for xx in params_train])
 
-        #build the SGD weight updates
+        # build the SGD weight updates
         batch_size_f = T.constant(self.conf['batch_size_val'],
                                   dtype=theano.config.floatX)
         comp_grads = T.grad(self.cost, params_train)
         comp_grads = [g / batch_size_f for g in comp_grads]
         comp_grads = [
-            T.clip(g, -self.conf['GRAD_CLIP_SIZE'], self.conf['GRAD_CLIP_SIZE'])
+            T.clip(g, -self.conf['GRAD_CLIP_SIZE'],
+                   self.conf['GRAD_CLIP_SIZE'])
             for g in comp_grads
         ]
         weight_updates = get_sgd_weight_updates(
@@ -672,12 +676,13 @@ class RNNModel:
                     self.Y_sh_train_drop[indx_wrap:indx_wrap +
                                          self.conf['batch_size_val']],
                     self.lm_rnn.x:
-                    self.X_sh_train_lm[indx:indx + self.conf['batch_size_val']],
+                    self.X_sh_train_lm[indx:indx +
+                                       self.conf['batch_size_val']],
                     self.lm_rnn.v:
                     np.ones(
                         (self.conf['batch_size_val'], 1),
                         dtype=theano.config.floatX
-                    ),  #self.V_sh_train[indx:indx+self.conf['batch_size_val']], 
+                    ),  # self.V_sh_train[indx:indx+self.conf['batch_size_val']],
                     self.lm_rnn.xlen:
                     self.X_sh_train_mask[indx:indx +
                                          self.conf['batch_size_val']],
@@ -798,14 +803,14 @@ class RNNModel:
             cur_idx = cur_idx % (
                 (num_train_examples / batch_size_val) * batch_size_val)
 
-            #we have done a full epoch
+            # we have done a full epoch
             if cur_idx == 0 and num_iter != 0:
                 epoch_number += 1
 
                 if epoch_callback is not None:
                     epoch_callback(self, epoch_number)
 
-                #randomize the dataset
+                # randomize the dataset
                 idx = np.arange(num_train_examples)
                 np.random.shuffle(idx)
                 self.X_sh_train.set_value(
@@ -846,7 +851,8 @@ class RNNModel:
     def get_val_perplexity(self):
         batch_size_val = self.conf['batch_size_val']
         num_batches = self.X_valid.shape[0] / batch_size_val
-        if self.X_valid.shape[0] % batch_size_val != 0: num_batches += 1
+        if self.X_valid.shape[0] % batch_size_val != 0:
+            num_batches += 1
         ppl_v_total = 0.0
         ppl_n_total = 0.0
         for i in range(num_batches):
@@ -885,7 +891,7 @@ class RNNModel:
         return 2**(ppl_v / ppl_n)
 
     def get_sentence_perplexity_batch(self, sens, v=None):
-        #TODO: finish this function needs a batch perplexity theano function to be implemented
+        # TODO: finish this function needs a batch perplexity theano function to be implemented
         self.setup_dataprovider(load_vocab=False)
         if v == None:
             v = np.zeros((len(sens), self.conf['visual_size']),
@@ -939,23 +945,25 @@ class RNNModel:
         sentence = []
         i2w = self.model['i2w']
         for i in sen:
-            if i == 0: break
+            if i == 0:
+                break
             sentence.append(i2w[i])
         return sentence
 
     def get_sentence(self, v, style_idx):
-        res = self.gen_sentence(v, self.conf['MAX_SENTENCE_LEN'] + 1, style_idx)
+        res = self.gen_sentence(
+            v, self.conf['MAX_SENTENCE_LEN'] + 1, style_idx)
         return self.sentence_idx_to_str(res)
 
 
 def main():
     rnn = RNNModel()
-    #rnn.load_model("saved_model_test.pik")
+    # rnn.load_model("saved_model_test.pik")
     rnn.load_training_dataset()
     rnn.build_model_core()
     rnn.load_val_dataset()
     rnn.build_perplexity_calculator()
-    #print rnn.get_val_perplexity()
+    # print rnn.get_val_perplexity()
     rnn.build_sentence_generator()
 
     rnn.build_model_trainer()
@@ -964,7 +972,7 @@ def main():
         print(("Epoch: %f" % epoch))
         for i in range(10):
             print((rnn.get_sentence(rnn.V_valid[np.random.randint(
-                rnn.V_valid.shape[0])])))  #np.zeros((1,)))
+                rnn.V_valid.shape[0])])))  # np.zeros((1,)))
 
     def epoch_callback(rnn, num_epoch):
         rnn.save_model("saved_model_test_%d.pik" % num_epoch)
@@ -978,11 +986,11 @@ def main():
 if __name__ == "__main__":
     main()
 
-#sys.exit(0)
+# sys.exit(0)
 
-#load the language model if needed
+# load the language model if needed
 #USE_LM = False
-#if USE_LM:
+# if USE_LM:
 #    lm = LSTM_LM()
 #    lm.init_dataset("../LangModel/flk30_not8k_sentences.pik")
 #    lm.init_model()

@@ -19,6 +19,8 @@ sentiscore = SentiScores("./data/noun_to_adj_senti_mine+dsb_0.100.pik")
 anp_list = set()
 for noun in sentiscore.noun_to_senti:
     for adj, s in sentiscore.noun_to_senti[noun]:
+        adj = str(adj)
+        noun = str(noun)
         anp_list.add((wnl.lemmatize(adj), wnl.lemmatize(noun)))
 
 

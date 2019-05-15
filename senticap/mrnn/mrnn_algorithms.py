@@ -17,7 +17,8 @@ class BeamInstance:
 
     def get_per_word(self, quantity):
         wds = len(self.word_idxs) - self.forced_count
-        if wds == 0: return 0.0
+        if wds == 0:
+            return 0.0
         return quantity / float(wds)
 
     def __lt__(self, other):
@@ -71,33 +72,33 @@ class BeamInstance:
         return self.highlight[:-1]
 
 
-#use a beam search to decode the sentence
+# use a beam search to decode the sentence
 def decoder_beamsearch2(rnn, v, beam_size=20, with_score=False):
     results = []
     beam = [BeamInstance()]
     while len(beam) > 0:
-        #advance all the states in the beam
+        # advance all the states in the beam
         for b in beam:
             b.do_step(rnn, v)
 
-        #get all the possible new states
+        # get all the possible new states
         possible_states = []
         for b in beam:
 
-            #store this as a finished beam
+            # store this as a finished beam
             if b.done():
                 b.finalize()
                 results.append(b)
                 continue
 
-            #try the top words
+            # try the top words
             best_words = b.get_best_words(beam_size)
             for w in best_words:
                 new_b = copy.deepcopy(b)
                 new_b.choose_word(w, rnn.model['i2w'])
                 possible_states.append(new_b)
 
-        #filter the possible states to create the new beam
+        # filter the possible states to create the new beam
         possible_states.sort()
         beam = possible_states[:beam_size]
 
@@ -109,7 +110,7 @@ def decoder_beamsearch2(rnn, v, beam_size=20, with_score=False):
     return results[0].log_prob, results[0].get_sentence_string()
 
 
-#use a beam search to decode the sentence
+# use a beam search to decode the sentence
 def decoder_beamsearch(rnn, v, senti=None, beam_size=20, with_score=False):
     results = []
     if senti is not None:
@@ -120,13 +121,13 @@ def decoder_beamsearch(rnn, v, senti=None, beam_size=20, with_score=False):
     while len(beam) > 0:
         new_beam = []
         for lp, c, w_idx, b, s in beam:
-            #try the best new words up to beam_size
+            # try the best new words up to beam_size
             all_lp = -np.log2(b['s_t'][0])
             score = b['s_t'][0]
             all_lp_srt = np.argsort(all_lp)
             for i in all_lp_srt[:beam_size]:
                 b['word_t'] = i
-                if i == 0 or c == 20:  #got the end token
+                if i == 0 or c == 20:  # got the end token
                     results.append(
                         ((all_lp[i] + lp) / (c + 1), c + 1, w_idx + [i],
                          copy.deepcopy(b), s + score[i]))
@@ -154,7 +155,7 @@ def decoder_beamsearch(rnn, v, senti=None, beam_size=20, with_score=False):
     return lp, sen
 
 
-#use a beam search to decode the sentence
+# use a beam search to decode the sentence
 def decoder_beamsearch_with_attention(rnn,
                                       v,
                                       senti=None,
@@ -169,15 +170,15 @@ def decoder_beamsearch_with_attention(rnn,
     while len(beam) > 0:
         new_beam = []
         for lp, c, w_idx, b, s, att in beam:
-            #try the best new words up to beam_size
+            # try the best new words up to beam_size
             all_lp = -np.log2(b['s_t'][0])
             score = b['s_t'][0]
-            #print "Attout", b['att_out']
+            # print "Attout", b['att_out']
             all_lp_srt = np.argsort(all_lp)
             for i in all_lp_srt[:beam_size]:
                 att_new = copy.deepcopy(att)
                 b['word_t'] = i
-                if i == 0 or c == 20:  #got the end token
+                if i == 0 or c == 20:  # got the end token
                     att_new.append(b['att_out'][0][0])
                     results.append(
                         ((all_lp[i] + lp) / (c + 1), c + 1, w_idx + [i],

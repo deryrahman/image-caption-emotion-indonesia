@@ -33,7 +33,7 @@ class ANPVisualScores:
 #the sentiment scores for each ANP
 class SentiScores:
     def __init__(self, filename):
-        self.noun_to_senti = pickle.load(open(filename, "rb"))
+        self.noun_to_senti = pickle.load(open(filename, "rb"), encoding='latin1')
         self.cache = {}
 
     def get_anp_to_score(self, all_nouns, goal=None):

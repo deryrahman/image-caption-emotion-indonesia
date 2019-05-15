@@ -10,7 +10,7 @@ ff = T.constant(1e-8, name="fudge_factor", dtype=theano.config.floatX)
 
 def get_sgd_weight_updates(method, grads, learnable_params, hist_grad,
                            delta_grad, **kwargs):
-    #do weight updates using adagrad
+    # do weight updates using adagrad
     comp_grads = grads
     if method == ADADELTA:
         rho = T.constant(kwargs["rho"], name="rho", dtype=theano.config.floatX)

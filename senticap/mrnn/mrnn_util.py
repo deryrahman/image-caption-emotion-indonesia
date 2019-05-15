@@ -3,7 +3,7 @@ import theano
 import json
 
 
-#get all the conversions from one dictionary to another
+# get all the conversions from one dictionary to another
 def get_dictionary_a_to_b(w2i_a, i2w_a, w2i_b, i2w_b):
     a2b = {}
     a2b_vec = np.zeros((len(i2w_a),), dtype=np.int32)
@@ -18,7 +18,7 @@ def get_dictionary_a_to_b(w2i_a, i2w_a, w2i_b, i2w_b):
     return a2b, a2b_vec, a2b_mask, b2a
 
 
-#turn a list of lists into a numpy array padded with zeros
+# turn a list of lists into a numpy array padded with zeros
 def pad_vectors(vals):
     mlen = np.max([v.shape[0] for v in vals])
     r = []
@@ -69,6 +69,7 @@ def init_layer_xavier_1(nrow, ncol, scale=1.0):
 
 
 def make_drop_mask(ninst, nrow, ncol, drop_prob):
+    ninst = int(ninst)
     return np.array(
         (np.random.rand(ninst, nrow, ncol) < drop_prob) * (1.0 / drop_prob),
         dtype=theano.config.floatX)

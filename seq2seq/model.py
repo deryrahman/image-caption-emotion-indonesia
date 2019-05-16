@@ -34,12 +34,14 @@ class EncoderRNN(nn.Module):
                  hidden_size,
                  vocab_size,
                  num_layers,
+                 dropout=0.22,
                  max_seq_length=40):
 
         super(EncoderRNN, self).__init__()
         self.max_seq_length = max_seq_length
         self.num_layers = num_layers
         self.hidden_size = hidden_size
+        self.dropout = nn.Dropout(dropout)
         self.embed = nn.Embedding(vocab_size, embed_size)
         self.lstm = nn.LSTM(embed_size,
                             hidden_size,
@@ -66,6 +68,7 @@ class EncoderRNN(nn.Module):
     def forward(self, features, src_tokens, lengths, teacher_forcing_ratio=0.5):
         batch_size = src_tokens.size(0)
         embeddings = self.embed(src_tokens)
+        embeddings = self.dropout(embeddings)
         embeddings = torch.cat((features.unsqueeze(1), embeddings), 1)
         pack_padded_sequence = nn.utils.rnn.pack_padded_sequence
         packed = pack_padded_sequence(embeddings, lengths, batch_first=True)
@@ -126,12 +129,14 @@ class DecoderRNN(nn.Module):
                  hidden_size,
                  vocab_size,
                  num_layers,
+                 dropout=0.22,
                  max_seq_length=40):
         super(DecoderRNN, self).__init__()
         self.max_seq_length = max_seq_length
         self.embed = nn.Embedding(vocab_size, embed_size)
         self.hidden_size = hidden_size
         self.num_layers = num_layers
+        self.dropout = nn.Dropout(dropout)
         self.lstm = nn.LSTM(embed_size,
                             hidden_size,
                             num_layers,
@@ -157,6 +162,7 @@ class DecoderRNN(nn.Module):
     def forward(self, states, dst_tokens, lengths, teacher_forcing_ratio=0.5):
         batch_size = dst_tokens.size(0)
         embeddings = self.embed(dst_tokens)
+        embeddings = self.dropout(embeddings)
         pack_padded_sequence = nn.utils.rnn.pack_padded_sequence
         packed = pack_padded_sequence(embeddings, lengths, batch_first=True)
 
@@ -218,21 +224,34 @@ class Seq2Seq(nn.Module):
                  hidden_size,
                  vocab_size,
                  num_layers,
+                 dropout=0.22,
                  max_seq_length=40):
         super(Seq2Seq, self).__init__()
         self.hidden_size = hidden_size
         self.max_seq_length = max_seq_length
-        self.encoder = EncoderRNN(embed_size, hidden_size, vocab_size,
-                                  num_layers)
+        self.encoder = EncoderRNN(embed_size,
+                                  hidden_size,
+                                  vocab_size,
+                                  num_layers,
+                                  dropout=dropout)
         # happy
-        self.decoder_happy = DecoderRNN(embed_size, hidden_size, vocab_size,
-                                        num_layers)
+        self.decoder_happy = DecoderRNN(embed_size,
+                                        hidden_size,
+                                        vocab_size,
+                                        num_layers,
+                                        dropout=dropout)
         # sad
-        self.decoder_sad = DecoderRNN(embed_size, hidden_size, vocab_size,
-                                      num_layers)
+        self.decoder_sad = DecoderRNN(embed_size,
+                                      hidden_size,
+                                      vocab_size,
+                                      num_layers,
+                                      dropout=dropout)
         # angry
-        self.decoder_angry = DecoderRNN(embed_size, hidden_size, vocab_size,
-                                        num_layers)
+        self.decoder_angry = DecoderRNN(embed_size,
+                                        hidden_size,
+                                        vocab_size,
+                                        num_layers,
+                                        dropout=dropout)
 
     def forward(self,
                 features,

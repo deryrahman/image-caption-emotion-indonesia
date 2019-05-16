@@ -36,11 +36,15 @@ class DecoderFactoredLSTM(nn.Module):
                  vocab_size,
                  num_layers,
                  bias=True,
+                 dropout=0.22,
                  max_seq_length=40):
         super(DecoderFactoredLSTM, self).__init__()
         self.hidden_size = hidden_size
         self.vocab_size = vocab_size
         self.max_seq_length = max_seq_length
+
+        # dropout
+        self.dropout = nn.Dropout(dropout)
 
         # embedding
         self.B = nn.Embedding(vocab_size, embed_size)
@@ -151,6 +155,7 @@ class DecoderFactoredLSTM(nn.Module):
                 mode='factual'):
         batch_size = captions.size(0)
         embeddings = self.B(captions)
+        embeddings = self.dropout(embeddings)
 
         # concat features and captions
         if features is not None:

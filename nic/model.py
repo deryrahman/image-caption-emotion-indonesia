@@ -63,7 +63,7 @@ class DecoderRNN(nn.Module):
         hiddens = hiddens.squeeze(1)
         return hiddens, (h_t, c_t)
 
-    def forward(self, captions, lengths, features, teacher_forcing_ratio=0.5):
+    def forward(self, captions, lengths, features, teacher_forcing_ratio=0.8):
         batch_size = captions.size(0)
         embeddings = self.embed(captions)
         embeddings = self.dropout(embeddings)

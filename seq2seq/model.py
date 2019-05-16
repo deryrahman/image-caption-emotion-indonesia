@@ -257,7 +257,7 @@ class Seq2Seq(nn.Module):
                 features,
                 src,
                 dst=(None, None),
-                teacher_forcing_ratio=0.5,
+                teacher_forcing_ratio=0.8,
                 mode='factual'):
         src_tokens, src_lengths = src
         dst_tokens, dst_lengths = dst

@@ -151,7 +151,7 @@ class DecoderFactoredLSTM(nn.Module):
                 captions,
                 lengths,
                 features=None,
-                teacher_forcing_ratio=0.5,
+                teacher_forcing_ratio=0.8,
                 mode='factual'):
         batch_size = captions.size(0)
         embeddings = self.B(captions)

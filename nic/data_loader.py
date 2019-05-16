@@ -55,6 +55,35 @@ class FlickrDataset(data.Dataset):
         return len(self.imgname_caption_list)
 
 
+class FlickrStyleDataset(data.Dataset):
+
+    def __init__(self, caption_file, vocab):
+        self.caption_list = self._get_caption(caption_file)
+        self.vocab = vocab
+
+    def _get_caption(self, caption_file):
+        with open(caption_file, 'r') as f:
+            caption_list = f.readlines()
+
+        caption_list = [x.strip() for x in caption_list]
+        return caption_list
+
+    def __getitem__(self, index):
+        caption = self.caption_list[index]
+
+        # Convert caption (string) to word ids.
+        tokens = nltk.tokenize.word_tokenize(str(caption).lower())
+        caption = []
+        caption.append(self.vocab('<start>'))
+        caption.extend([self.vocab(token) for token in tokens])
+        caption.append(self.vocab('<end>'))
+        target = torch.Tensor(caption)
+        return target
+
+    def __len__(self):
+        return len(self.caption_list)
+
+
 def collate_fn(data):
     """Creates mini-batch tensors from the list of tuples (image, caption).
 
@@ -87,6 +116,19 @@ def collate_fn(data):
     return images, targets, lengths
 
 
+def collate_fn_styled(captions):
+    # Sort a data list by caption length (descending order).
+    captions.sort(key=lambda x: len(x), reverse=True)
+
+    # Merge captions (from tuple of 1D tensor to 2D tensor).
+    lengths = [len(cap) for cap in captions]
+    targets = torch.zeros(len(captions), max(lengths)).long()
+    for i, cap in enumerate(captions):
+        end = lengths[i]
+        targets[i, :end] = cap[:end]
+    return targets, lengths
+
+
 def get_loader(img_dir, caption_file, vocab, transform, batch_size, shuffle,
                num_workers):
     """Returns torch.utils.data.DataLoader for custom flickr dataset."""
@@ -106,4 +148,21 @@ def get_loader(img_dir, caption_file, vocab, transform, batch_size, shuffle,
                                               shuffle=shuffle,
                                               num_workers=num_workers,
                                               collate_fn=collate_fn)
+    return data_loader
+
+
+def get_style_loader(caption_file, vocab, batch_size, shuffle, num_workers):
+    """Returns torch.utils.data.DataLoader for custom flickr style dataset."""
+    # FlickrStyle caption dataset
+    flickr_style = FlickrStyleDataset(caption_file=caption_file, vocab=vocab)
+
+    # Data loader for FlickrStyle dataset
+    # This will return (captions, lengths) for each iteration.
+    # captions: a tensor of shape (batch_size, padded_length).
+    # lengths: a list indicating valid length for each caption. length is (batch_size).
+    data_loader = torch.utils.data.DataLoader(dataset=flickr_style,
+                                              batch_size=batch_size,
+                                              shuffle=shuffle,
+                                              num_workers=num_workers,
+                                              collate_fn=collate_fn_styled)
     return data_loader

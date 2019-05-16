@@ -2,7 +2,9 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 import sys
+import random
 
+random.seed(0)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
@@ -141,7 +143,12 @@ class DecoderFactoredLSTM(nn.Module):
 
         return h_t, (h_t, c_t)
 
-    def forward(self, captions, lengths, features=None, mode='factual'):
+    def forward(self,
+                captions,
+                lengths,
+                features=None,
+                teacher_forcing_ratio=0.5,
+                mode='factual'):
         batch_size = captions.size(0)
         embeddings = self.B(captions)
 
@@ -155,11 +162,19 @@ class DecoderFactoredLSTM(nn.Module):
         h_t = torch.zeros(batch_size, self.hidden_size).to(device)
         c_t = torch.zeros(batch_size, self.hidden_size).to(device)
         hiddens = []
+        predicted = captions[:, 0:1]
         for i, b_sz in enumerate(packed.batch_sizes):
-            emb = embeddings[:b_sz, i, :]
+            if random.random() < teacher_forcing_ratio:
+                emb = embeddings[:b_sz, i, :]
+            else:
+                emb = self.B(predicted)[:b_sz, 0, :]
             h_t, c_t = h_t[:b_sz, :], c_t[:b_sz, :]
             hidden, (h_t, c_t) = self.forward_step(emb, (h_t, c_t), mode=mode)
             hiddens.append(hidden)
+
+            output = self.C(hidden)
+            _, predicted = output.max(1)
+            predicted = predicted.unsqueeze(1)
 
         hiddens = torch.cat(hiddens, 0)
         outputs = self.C(hiddens)

@@ -225,7 +225,7 @@ def val_factual(encoder, decoder, criterion, data_loader):
                                        batch_first=True)[0]
         # Forward, backward and optimize
         features = encoder(images)
-        outputs = decoder(captions, lengths, features)
+        outputs = decoder(captions, lengths, features, teacher_forcing_ratio=0)
         loss = criterion(outputs, targets)
 
         # Keep track of metrics
@@ -291,7 +291,10 @@ def val_emotion(encoder, decoder, criterion, data_loaders, tags):
                                            lengths=lengths,
                                            batch_first=True)[0]
             # Forward, backward and optimize
-            outputs = decoder(captions[:, :-1], lengths, mode=tags[j])
+            outputs = decoder(captions[:, :-1],
+                              lengths,
+                              teacher_forcing_ratio=0,
+                              mode=tags[j])
             loss = criterion(outputs, targets)
 
             # Keep track of metrics

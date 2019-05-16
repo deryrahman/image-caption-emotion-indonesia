@@ -106,22 +106,30 @@ class DecoderFactoredLSTMAtt(nn.Module):
         # factored lstm weights
         self.U_i = nn.Linear(factored_size, hidden_size, bias=bias)
         self.S_fi = nn.Linear(factored_size, factored_size, bias=bias)
-        self.V_i = nn.Linear(embed_size, factored_size, bias=bias)
+        self.V_i = nn.Linear(embed_size + feature_size,
+                             factored_size,
+                             bias=bias)
         self.W_i = nn.Linear(hidden_size, hidden_size, bias=bias)
 
         self.U_f = nn.Linear(factored_size, hidden_size, bias=bias)
         self.S_ff = nn.Linear(factored_size, factored_size, bias=bias)
-        self.V_f = nn.Linear(embed_size, factored_size, bias=bias)
+        self.V_f = nn.Linear(embed_size + feature_size,
+                             factored_size,
+                             bias=bias)
         self.W_f = nn.Linear(hidden_size, hidden_size, bias=bias)
 
         self.U_o = nn.Linear(factored_size, hidden_size, bias=bias)
         self.S_fo = nn.Linear(factored_size, factored_size, bias=bias)
-        self.V_o = nn.Linear(embed_size, factored_size, bias=bias)
+        self.V_o = nn.Linear(embed_size + feature_size,
+                             factored_size,
+                             bias=bias)
         self.W_o = nn.Linear(hidden_size, hidden_size, bias=bias)
 
         self.U_c = nn.Linear(factored_size, hidden_size, bias=bias)
         self.S_fc = nn.Linear(factored_size, factored_size, bias=bias)
-        self.V_c = nn.Linear(embed_size, factored_size, bias=bias)
+        self.V_c = nn.Linear(embed_size + feature_size,
+                             factored_size,
+                             bias=bias)
         self.W_c = nn.Linear(hidden_size, hidden_size, bias=bias)
 
         # happy

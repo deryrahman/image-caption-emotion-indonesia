@@ -126,7 +126,7 @@ def main(args):
                                        num_workers=num_workers)
 
     # Build the models
-    encoder = EncoderCNN(embed_size).to(device)
+    encoder = EncoderCNN().to(device)
     decoder = DecoderFactoredLSTMAtt(attention_size,
                                      embed_size,
                                      hidden_size,

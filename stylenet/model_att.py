@@ -258,31 +258,107 @@ class DecoderFactoredLSTMAtt(nn.Module):
 
         return outputs, alphas
 
-    def sample(self, features, states=None, factual_limit=-1, mode='factual'):
-        """Generate captions for given image features using greedy search."""
-        states = (None, None)
-        sampled_ids = []
-        inputs = features.unsqueeze(1)
+    def sample(self,
+               features,
+               start_token,
+               end_token,
+               k=5,
+               factual_limit=-1,
+               mode='factual'):
+        """Generate captions for given image features using beam search."""
 
-        for i in range(self.max_seq_length):
-            # hiddens: (batch_size, 1, hidden_size)
-            m = mode if i > factual_limit else 'factual'
-            hiddens, states = self.forward_step(inputs, states, m)
+        # enc_image_size = features.size(1)
+        feature_size = features.size(-1)
 
-            # outputs:  (batch_size, vocab_size)
-            outputs = self.C(hiddens.squeeze(1))
+        features = features.view(1, -1, feature_size)
+        num_pixels = features.size(1)
+        # (k, num_pixels, encoder_dim)
+        features = features.expand(k, num_pixels, feature_size)
+        # (k, 1)
+        k_prev_words = torch.LongTensor([[start_token]] * k).to(device)
+        seqs = k_prev_words
+        top_k_scores = torch.zeros(k, 1).to(device)
 
-            # predicted: (batch_size)
-            _, predicted = outputs.max(1)
-            sampled_ids.append(predicted)
+        # Lists to store completed sequences and scores
+        complete_seqs = list()
+        complete_seqs_scores = list()
 
-            # inputs: (batch_size, embed_size)
-            inputs = self.B(predicted)
+        # Start decoding
+        step = 1
+        (h_t, c_t) = (None, None)
 
-            # inputs: (batch_size, 1, embed_size)
-            inputs = inputs.unsqueeze(1)
+        while True:
+            # (s, embed_dim)
+            embeddings = self.B(k_prev_words).squeeze(1)
+            # (s, encoder_dim), (s, num_pixels)
+            awe, _ = self.attention(features, h_t)
 
-        # sampled_ids: (batch_size, max_seq_length)
-        sampled_ids = torch.stack(sampled_ids, 1)
+            # gating scalar, (s, encoder_dim)
+            gate = self.sigmoid(self.f_beta(h_t))
+            awe = gate * awe
 
-        return sampled_ids
+            inputs = torch.cat([embeddings, awe])
+            res = self.forward_step(inputs, (h_t, c_t), mode=mode)
+            hidden, (h_t, c_t) = res
+
+            # (s, vocab_size)
+            output = self.C(hidden)
+            scores = torch.F.log_softmax(output, dim=1)
+
+            # Add
+            # (s, vocab_size)
+            scores = top_k_scores.expand_as(scores) + scores
+
+            # For the first step, all k points will have the same scores (since same k previous words, h, c)
+            if step == 1:
+                # (s)
+                top_k_scores, top_k_words = scores[0].topk(k, 0, True, True)
+            else:
+                # Unroll and find top scores, and their unrolled indices
+                # (s)
+                top_k_scores, top_k_words = scores.view(-1).topk(
+                    k, 0, True, True)
+
+            # Convert unrolled indices to actual indices of scores
+            prev_word_inds = top_k_words / self.vocab_size  # (s)
+            next_word_inds = top_k_words % self.vocab_size  # (s)
+
+            # Add new words to sequences
+            # (s, step+1)
+            seqs = torch.cat(
+                [seqs[prev_word_inds],
+                 next_word_inds.unsqueeze(1)], dim=1)
+
+            # Which sequences are incomplete (didn't reach <end>)?
+            incomplete_inds = [
+                ind for ind, next_word in enumerate(next_word_inds)
+                if next_word != end_token
+            ]
+            complete_inds = list(
+                set(range(len(next_word_inds))) - set(incomplete_inds))
+
+            # Set aside complete sequences
+            if len(complete_inds) > 0:
+                complete_seqs.extend(seqs[complete_inds].tolist())
+                complete_seqs_scores.extend(top_k_scores[complete_inds])
+            # reduce beam length accordingly
+            k -= len(complete_inds)
+
+            # Proceed with incomplete sequences
+            if k == 0:
+                break
+            seqs = seqs[incomplete_inds]
+            h_t = h_t[prev_word_inds[incomplete_inds]]
+            c_t = c_t[prev_word_inds[incomplete_inds]]
+            features = features[prev_word_inds[incomplete_inds]]
+            top_k_scores = top_k_scores[incomplete_inds].unsqueeze(1)
+            k_prev_words = next_word_inds[incomplete_inds].unsqueeze(1)
+
+            # Break if things have been going on too long
+            if step > self.max_seq_length:
+                break
+            step += 1
+        i = complete_seqs_scores.index(max(complete_seqs_scores))
+        seq = complete_seqs[i]
+
+        return seq

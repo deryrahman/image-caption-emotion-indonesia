@@ -41,6 +41,7 @@ def main(args):
     embed_size = args.embed_size
     hidden_size = args.hidden_size
     factored_size = args.factored_size
+    attention_size = args.attention_size
     dropout = args.dropout
 
     lr_caption = args.lr_caption
@@ -126,7 +127,7 @@ def main(args):
 
     # Build the models
     encoder = EncoderCNN(embed_size).to(device)
-    decoder = DecoderFactoredLSTMAtt(512,
+    decoder = DecoderFactoredLSTMAtt(attention_size,
                                      embed_size,
                                      hidden_size,
                                      factored_size,
@@ -244,7 +245,11 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
         batch_time.update(time.time() - start)
 
     feature = features[0].unsqueeze(0)
-    sampled_ids = decoder.sample(feature)
+    start_token = vocab.word2idx['<start>']
+    end_token = vocab.word2idx['<end>']
+    sampled_ids = decoder.sample(feature,
+                                 start_token=start_token,
+                                 end_token=end_token)
     sampled_ids = sampled_ids[0].cpu().numpy()
 
     # Convert word_ids to words
@@ -336,7 +341,12 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
 
         feature = features[0].unsqueeze(0)
 
-        sampled_ids = decoder.sample(feature, mode=tags[j])
+        start_token = vocab.word2idx['<start>']
+        end_token = vocab.word2idx['<end>']
+        sampled_ids = decoder.sample(feature,
+                                     start_token=start_token,
+                                     end_token=end_token,
+                                     mode=tags[j])
         sampled_ids = sampled_ids[0].cpu().numpy()
 
         # Convert word_ids to words
@@ -455,6 +465,7 @@ if __name__ == '__main__':
     parser.add_argument('--embed_size', type=int, default=300)
     parser.add_argument('--hidden_size', type=int, default=512)
     parser.add_argument('--factored_size', type=int, default=512)
+    parser.add_argument('--attention_size', type=int, default=512)
     parser.add_argument('--dropout', type=float, default=0.22)
 
     parser.add_argument('--num_epochs', type=int, default=30)

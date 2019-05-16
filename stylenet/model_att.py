@@ -277,6 +277,7 @@ class DecoderFactoredLSTMAtt(nn.Module):
 
         # enc_image_size = features.size(1)
         feature_size = features.size(-1)
+        batch_size = features.size(0)
 
         features = features.view(1, -1, feature_size)
         num_pixels = features.size(1)
@@ -293,7 +294,8 @@ class DecoderFactoredLSTMAtt(nn.Module):
 
         # Start decoding
         step = 1
-        (h_t, c_t) = (None, None)
+        h_t = torch.zeros(batch_size, self.hidden_size).to(device)
+        c_t = torch.zeros(batch_size, self.hidden_size).to(device)
 
         while True:
             # (s, embed_dim)
@@ -305,13 +307,13 @@ class DecoderFactoredLSTMAtt(nn.Module):
             gate = self.sigmoid(self.f_beta(h_t))
             awe = gate * awe
 
-            inputs = torch.cat([embeddings, awe])
+            inputs = torch.cat([embeddings, awe], dim=1)
             res = self.forward_step(inputs, (h_t, c_t), mode=mode)
             hidden, (h_t, c_t) = res
 
             # (s, vocab_size)
             output = self.C(hidden)
-            scores = torch.F.log_softmax(output, dim=1)
+            scores = torch.nn.functional.log_softmax(output, dim=1)
 
             # Add
             # (s, vocab_size)
@@ -344,7 +346,6 @@ class DecoderFactoredLSTMAtt(nn.Module):
             ]
             complete_inds = list(
                 set(range(len(next_word_inds))) - set(incomplete_inds))
-
             # Set aside complete sequences
             if len(complete_inds) > 0:
                 complete_seqs.extend(seqs[complete_inds].tolist())

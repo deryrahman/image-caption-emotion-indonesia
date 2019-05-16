@@ -233,7 +233,6 @@ def val_factual(encoder, decoder, criterion, data_loader):
         top5 = accuracy(outputs, targets, 5)
         top5accs.update(top5, sum(lengths))
         batch_time.update(time.time() - start)
-        break
 
     return batch_time.val, top5accs.avg, losses.avg
 
@@ -270,7 +269,6 @@ def train_factual(encoder, decoder, optimizer, criterion, data_loader,
         # Keep track of metrics
         losses.update(loss.item(), sum(lengths))
         batch_time.update(time.time() - start)
-        break
 
     return batch_time.val, losses.avg
 
@@ -301,7 +299,6 @@ def val_emotion(encoder, decoder, criterion, data_loaders, tags):
             top5 = accuracy(outputs, targets, 5)
             top5accs[j].update(top5, sum(lengths))
             batch_time.update(time.time() - start)
-            break
 
     top5accs = [top5acc.avg for top5acc in top5accs]
     losses = [loss.avg for loss in losses]
@@ -338,7 +335,6 @@ def train_emotion(encoder, decoder, optimizers, criterion, data_loaders, tags,
             # Keep track of metrics
             losses[j].update(loss.item(), sum(lengths))
             batch_time.update(time.time() - start)
-            break
 
     return batch_time.val, [loss.avg for loss in losses]
 

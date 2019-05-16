@@ -106,7 +106,7 @@ def main(args):
                                      vocab,
                                      transform,
                                      language_batch_size,
-                                     shuffle=True,
+                                     shuffle=False,
                                      num_workers=num_workers)
     angry_data_loader = get_loader(image_dir,
                                    angry_path,
@@ -120,7 +120,7 @@ def main(args):
                                        vocab,
                                        transform,
                                        language_batch_size,
-                                       shuffle=True,
+                                       shuffle=False,
                                        num_workers=num_workers)
 
     # Build the models
@@ -154,6 +154,7 @@ def main(args):
 
         val_res = val_factual(encoder=encoder,
                               decoder=decoder,
+                              vocab=vocab,
                               criterion=criterion,
                               data_loader=val_data_loader)
         batch_time, loss = res
@@ -177,6 +178,7 @@ def main(args):
         batch_time, losses = res
         val_res = val_emotion(encoder=encoder,
                               decoder=decoder,
+                              vocab=vocab,
                               criterion=criterion,
                               data_loaders=val_data_loaders,
                               tags=tags)
@@ -202,7 +204,7 @@ def main(args):
             os.path.join(args.model_path, 'encoder-{}.ckpt'.format(epoch + 1)))
 
 
-def val_factual(encoder, decoder, criterion, data_loader):
+def val_factual(encoder, decoder, vocab, criterion, data_loader):
     decoder.eval()
     encoder.eval()
 
@@ -228,6 +230,20 @@ def val_factual(encoder, decoder, criterion, data_loader):
         top5 = accuracy(outputs, targets, 5)
         top5accs.update(top5, sum(lengths))
         batch_time.update(time.time() - start)
+
+    feature = features[0].unsqueeze(0)
+    sampled_ids = decoder.sample(feature)
+    sampled_ids = sampled_ids[0].cpu().numpy()
+
+    # Convert word_ids to words
+    sampled_caption = []
+    for word_id in sampled_ids:
+        word = vocab.idx2word[word_id]
+        sampled_caption.append(word)
+        if word == '<end>':
+            break
+
+    print(sampled_caption)
 
     return batch_time.val, top5accs.avg, losses.avg
 
@@ -268,7 +284,7 @@ def train_factual(encoder, decoder, optimizer, criterion, data_loader,
     return batch_time.val, losses.avg
 
 
-def val_emotion(encoder, decoder, criterion, data_loaders, tags):
+def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
     decoder.eval()
     encoder.eval()
 
@@ -299,6 +315,21 @@ def val_emotion(encoder, decoder, criterion, data_loaders, tags):
             top5 = accuracy(outputs, targets, 5)
             top5accs[j].update(top5, sum(lengths))
             batch_time.update(time.time() - start)
+
+        feature = features[0].unsqueeze(0)
+
+        sampled_ids = decoder.sample(feature, mode=tags[j])
+        sampled_ids = sampled_ids[0].cpu().numpy()
+
+        # Convert word_ids to words
+        sampled_caption = []
+        for word_id in sampled_ids:
+            word = vocab.idx2word[word_id]
+            sampled_caption.append(word)
+            if word == '<end>':
+                break
+
+        print(sampled_caption)
 
     top5accs = [top5acc.avg for top5acc in top5accs]
     losses = [loss.avg for loss in losses]

@@ -28,8 +28,10 @@ def main(args):
     image_dir = args.image_dir
     caption_path = args.caption_path
     factual_caption_path = args.factual_caption_path
-    val_image_dir = args.val_image_dir
     val_caption_path = args.val_caption_path
+    val_happy_path = args.val_happy_path
+    val_sad_path = args.val_sad_path
+    val_angry_path = args.val_angry_path
     caption_batch_size = args.caption_batch_size
 
     happy_path = args.happy_path
@@ -71,7 +73,7 @@ def main(args):
                              caption_batch_size,
                              shuffle=True,
                              num_workers=num_workers)
-    val_data_loader = get_loader(val_image_dir,
+    val_data_loader = get_loader(image_dir,
                                  val_caption_path,
                                  vocab,
                                  transform,
@@ -86,6 +88,14 @@ def main(args):
                                          language_batch_size,
                                          shuffle=True,
                                          num_workers=num_workers)
+    val_happy_data_loader = get_style_loader(image_dir,
+                                             factual_caption_path,
+                                             val_happy_path,
+                                             vocab,
+                                             transform,
+                                             language_batch_size,
+                                             shuffle=False,
+                                             num_workers=num_workers)
     sad_data_loader = get_style_loader(image_dir,
                                        factual_caption_path,
                                        sad_path,
@@ -94,6 +104,14 @@ def main(args):
                                        language_batch_size,
                                        shuffle=True,
                                        num_workers=num_workers)
+    val_sad_data_loader = get_style_loader(image_dir,
+                                           factual_caption_path,
+                                           val_sad_path,
+                                           vocab,
+                                           transform,
+                                           language_batch_size,
+                                           shuffle=False,
+                                           num_workers=num_workers)
     angry_data_loader = get_style_loader(image_dir,
                                          factual_caption_path,
                                          angry_path,
@@ -102,6 +120,14 @@ def main(args):
                                          language_batch_size,
                                          shuffle=True,
                                          num_workers=num_workers)
+    val_angry_data_loader = get_style_loader(image_dir,
+                                             factual_caption_path,
+                                             val_angry_path,
+                                             vocab,
+                                             transform,
+                                             language_batch_size,
+                                             shuffle=True,
+                                             num_workers=num_workers)
 
     # Build the models
     encoder = EncoderCNN(embed_size).to(device)
@@ -123,6 +149,9 @@ def main(args):
 
     # Train the models
     data_loaders = [happy_data_loader, sad_data_loader, angry_data_loader]
+    val_data_loaders = [
+        val_happy_data_loader, val_sad_data_loader, val_angry_data_loader
+    ]
     tags = ['happy', 'sad', 'angry']
     optimizers = [happy_optimizer, sad_optimizer, angry_optimizer]
 
@@ -138,6 +167,7 @@ def main(args):
 
         val_res = val_factual(encoder=encoder,
                               seq2seq=seq2seq,
+                              vocab=vocab,
                               criterion=criterion,
                               data_loader=val_data_loader)
         batch_time, loss = res
@@ -160,12 +190,24 @@ def main(args):
                             tags=tags,
                             log_step=log_step_emotion)
         batch_time, losses = res
+        val_res = val_emotion(encoder=encoder,
+                              seq2seq=seq2seq,
+                              vocab=vocab,
+                              criterion=criterion,
+                              data_loaders=val_data_loaders,
+                              tags=tags)
+        val_batch_time, top5accs, losses_val = val_res
+        batch_time = val_batch_time
         print("""Batch Time: {:.3f}""".format(batch_time))
         for i in range(len(tags)):
             print(
-                """Epoch [{}/{}], [{}], Train Loss: {:.4f}, Train Perplexity: {:5.4f}"""
-                .format(epoch, num_epochs, tags[i][:3].upper(), losses[i],
-                        np.exp(losses[i])))
+                """Epoch [{}/{}], [{}], Batch Time: {:.3f}, Top-5 Acc: {:.3f}"""
+                .format(epoch, num_epochs, tags[i][:3].upper(), batch_time,
+                        top5accs[i]))
+            print("""\tTrain Loss: {:.4f} | Train Perplexity: {:5.4f}""".format(
+                losses[i], np.exp(losses[i])))
+            print("""\tVal   Loss: {:.4f} | Val   Perplexity: {:5.4f}""".format(
+                losses_val[i], np.exp(losses_val[i])))
 
         # Save the model checkpoints
         torch.save(
@@ -176,7 +218,7 @@ def main(args):
             os.path.join(args.model_path, 'encoder-{}.ckpt'.format(epoch + 1)))
 
 
-def val_factual(encoder, seq2seq, criterion, data_loader):
+def val_factual(encoder, seq2seq, vocab, criterion, data_loader):
     seq2seq.eval()
     encoder.eval()
 
@@ -194,7 +236,8 @@ def val_factual(encoder, seq2seq, criterion, data_loader):
                                        batch_first=True)[0]
         # Forward, backward and optimize
         features = encoder(images)
-        outputs = seq2seq(features, (captions, lengths))
+        outputs = seq2seq(features, (captions, lengths),
+                          teacher_forcing_ratio=0)
         loss = criterion(outputs, targets)
 
         # Keep track of metrics
@@ -202,6 +245,20 @@ def val_factual(encoder, seq2seq, criterion, data_loader):
         top5 = accuracy(outputs, targets, 5)
         top5accs.update(top5, sum(lengths))
         batch_time.update(time.time() - start)
+
+    feature = features[0].unsqueeze(0)
+    sampled_ids = seq2seq.sample(feature, start_token=vocab.word2idx['<start>'])
+    sampled_ids = sampled_ids[0].cpu().numpy()
+
+    # Convert word_ids to words
+    sampled_caption = []
+    for word_id in sampled_ids:
+        word = vocab.idx2word[word_id]
+        sampled_caption.append(word)
+        if word == '<end>':
+            break
+
+    print(sampled_caption)
 
     return batch_time.val, top5accs.avg, losses.avg
 
@@ -240,6 +297,64 @@ def train_factual(encoder, seq2seq, optimizer, criterion, data_loader,
         batch_time.update(time.time() - start)
 
     return batch_time.val, losses.avg
+
+
+def val_emotion(encoder, seq2seq, vocab, criterion, data_loaders, tags):
+    seq2seq.eval()
+    encoder.eval()
+
+    batch_time = AverageMeter()
+    losses = [AverageMeter() for _ in range(len(tags))]
+    top5accs = [AverageMeter() for _ in range(len(tags))]
+    start = time.time()
+
+    for j in random.sample([i for i in range(len(tags))], len(tags)):
+        for i, (images, src, dst) in enumerate(data_loaders[j]):
+            # Set mini-batch dataset
+            images = images.to(device)
+            captions_src, length_src = src
+            captions_dst, length_dst = src
+            captions_src = captions_src.to(device)
+            captions_dst = captions_dst.to(device)
+            length_dst = [l - 1 for l in length_dst]
+            targets = pack_padded_sequence(input=captions_dst[:, 1:],
+                                           lengths=length_dst,
+                                           batch_first=True)[0]
+            # Forward, backward and optimize
+            features = encoder(images)
+            outputs = seq2seq(features=features,
+                              src=(captions_src, length_src),
+                              dst=(captions_dst[:, :-1], length_dst),
+                              teacher_forcing_ratio=0,
+                              mode=tags[j])
+            loss = criterion(outputs, targets)
+
+            # Keep track of metrics
+            losses[j].update(loss.item(), sum(length_dst))
+            top5 = accuracy(outputs, targets, 5)
+            top5accs[j].update(top5, sum(length_dst))
+            batch_time.update(time.time() - start)
+
+        feature = features[0].unsqueeze(0)
+
+        sampled_ids = seq2seq.sample(feature,
+                                     start_token=vocab.word2idx['<start>'],
+                                     mode=tags[j])
+        sampled_ids = sampled_ids[0].cpu().numpy()
+
+        # Convert word_ids to words
+        sampled_caption = []
+        for word_id in sampled_ids:
+            word = vocab.idx2word[word_id]
+            sampled_caption.append(word)
+            if word == '<end>':
+                break
+
+        print(sampled_caption)
+
+    top5accs = [top5acc.avg for top5acc in top5accs]
+    losses = [loss.avg for loss in losses]
+    return batch_time.val, top5accs, losses
 
 
 def train_emotion(encoder, seq2seq, optimizers, criterion, data_loaders, tags,
@@ -310,26 +425,33 @@ if __name__ == '__main__':
                         type=str,
                         default='data/flickr30k_id/all.txt',
                         help='path for train txt file')
-    parser.add_argument('--val_image_dir',
-                        type=str,
-                        default='/home/m13515097/final_project/'
-                        '13515097-stylenet/dataset/flickr30k/img',
-                        help='directory for val images')
     parser.add_argument('--val_caption_path',
                         type=str,
                         default='data/flickr8k_id/val.txt',
                         help='path for val txt file')
     parser.add_argument('--happy_path',
                         type=str,
-                        default='data/flickr8k_id/happy/train_supervised.txt',
+                        default='data/flickr8k_id/happy/train.txt',
+                        help='path for train txt file')
+    parser.add_argument('--val_happy_path',
+                        type=str,
+                        default='data/flickr8k_id/happy/val.txt',
                         help='path for train txt file')
     parser.add_argument('--sad_path',
                         type=str,
-                        default='data/flickr8k_id/sad/train_supervised.txt',
+                        default='data/flickr8k_id/sad/train.txt',
+                        help='path for train txt file')
+    parser.add_argument('--val_sad_path',
+                        type=str,
+                        default='data/flickr8k_id/sad/val.txt',
                         help='path for train txt file')
     parser.add_argument('--angry_path',
                         type=str,
-                        default='data/flickr8k_id/angry/train_supervised.txt',
+                        default='data/flickr8k_id/angry/train.txt',
+                        help='path for train txt file')
+    parser.add_argument('--val_angry_path',
+                        type=str,
+                        default='data/flickr8k_id/angry/val.txt',
                         help='path for train txt file')
 
     parser.add_argument('--log_step', type=int, default=50)

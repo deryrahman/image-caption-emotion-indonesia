@@ -5,11 +5,13 @@ import numpy as np
 import os
 import pickle
 import random
-from data_loader import get_loader, get_style_loader
+import time
+from data_loader import get_loader
 from build_vocab import Vocabulary
 from model import EncoderCNN, DecoderFactoredLSTM
 from torch.nn.utils.rnn import pack_padded_sequence
 from torchvision import transforms
+from utils import AverageMeter, accuracy
 # from validate import validate
 
 # Device configuration
@@ -25,6 +27,8 @@ def main(args):
 
     image_dir = args.image_dir
     caption_path = args.caption_path
+    val_image_dir = args.val_image_dir
+    val_caption_path = args.val_caption_path
     caption_batch_size = args.caption_batch_size
 
     happy_path = args.happy_path
@@ -40,6 +44,7 @@ def main(args):
     lr_language = args.lr_language
     num_epochs = args.num_epochs
     log_step = args.log_step
+    log_step_emotion = args.log_step_emotion
 
     # Create model directory
     if not os.path.exists(model_path):
@@ -66,6 +71,13 @@ def main(args):
                              caption_batch_size,
                              shuffle=True,
                              num_workers=num_workers)
+    val_data_loader = get_loader(val_image_dir,
+                                 val_caption_path,
+                                 vocab,
+                                 transform,
+                                 caption_batch_size,
+                                 shuffle=False,
+                                 num_workers=num_workers)
     happy_data_loader = get_loader(image_dir,
                                    happy_path,
                                    vocab,
@@ -102,65 +114,47 @@ def main(args):
     lang_optimizer = torch.optim.Adam(lang_params, lr=lr_language)
 
     # Train the models
-    total_step = len(data_loader)
-    happy_step = len(happy_data_loader)
-    sad_step = len(sad_data_loader)
-    angry_step = len(angry_data_loader)
+    data_loaders = [happy_data_loader, sad_data_loader, angry_data_loader]
+    tags = ['happy', 'sad', 'angry']
+
     for epoch in range(num_epochs):
-        decoder.train()
-        encoder.train()
+        # train factual
+        res = train_factual(encoder=encoder,
+                            decoder=decoder,
+                            optimizer=optimizer,
+                            criterion=criterion,
+                            data_loader=data_loader,
+                            log_step=log_step)
 
-        for i, (images, captions, lengths) in enumerate(data_loader):
-            # Set mini-batch dataset
-            images = images.to(device)
-            captions = captions.to(device)
-            targets = pack_padded_sequence(input=captions,
-                                           lengths=lengths,
-                                           batch_first=True)[0]
-            # Forward, backward and optimize
-            features = encoder(images)
-            outputs = decoder(captions, lengths, features)
-            loss = criterion(outputs, targets)
-            decoder.zero_grad()
-            encoder.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            # Print log info
-            if i % log_step == 0:
-                print(
-                    'Epoch [{}/{}], [FAC], Step [{}/{}], Loss: {:.4f}, Perplexity: {:5.4f}'
-                    .format(epoch, num_epochs, i, total_step, loss.item(),
-                            np.exp(loss.item())))
+        val_res = val_factual(encoder=encoder,
+                              decoder=decoder,
+                              criterion=criterion,
+                              data_loader=val_data_loader)
+        batch_time, loss = res
+        val_batch_time, top5, loss_val = val_res
+        batch_time += val_batch_time
+        print("""Epoch [{}/{}], [FAC], Batch Time: {:.3f}, Top-5 Acc: {:.3f}""".
+              format(epoch, num_epochs, batch_time, top5))
+        print("""\tTrain Loss: {:.4f} | Train Perplexity: {:5.4f}""".format(
+            loss, np.exp(loss)))
+        print("""\tVal   Loss: {:.4f} | Val   Perplexity: {:5.4f}""".format(
+            loss_val, np.exp(loss_val)))
 
         # train style
-        data_loaders = [happy_data_loader, sad_data_loader, angry_data_loader]
-        tags = ['happy', 'sad', 'angry']
-        steps = [happy_step, sad_step, angry_step]
-
-        for j in random.sample([i for i in range(len(tags))], len(tags)):
-            for i, (images, captions, lengths) in enumerate(data_loaders[j]):
-                # Set mini-batch dataset
-                images = images.to(device)
-                captions = captions.to(device)
-                targets = pack_padded_sequence(input=captions,
-                                               lengths=lengths,
-                                               batch_first=True)[0]
-                # Forward, backward and optimize
-                features = encoder(images)
-                outputs = decoder(captions, lengths, features, mode=tags[j])
-                loss = criterion(outputs, targets)
-                decoder.zero_grad()
-                # encoder.zero_grad()
-                loss.backward()
-                lang_optimizer.step()
-
-                # Print log info
-                if i % 5 == 0:
-                    print(
-                        'Epoch [{}/{}], [{}], Step [{}/{}], Loss: {:.4f}, Perplexity: {:5.4f}'
-                        .format(epoch, num_epochs, tags[j][:3].upper(), i,
-                                steps[j], loss.item(), np.exp(loss.item())))
+        res = train_emotion(encoder=encoder,
+                            decoder=decoder,
+                            optimizer=lang_optimizer,
+                            criterion=criterion,
+                            data_loaders=data_loaders,
+                            tags=tags,
+                            log_step=log_step_emotion)
+        batch_time, losses = res
+        print("""Batch Time: {:.3f}""".format(batch_time))
+        for i in range(len(tags)):
+            print(
+                """Epoch [{}/{}], [{}], Train Loss: {:.4f}, Train Perplexity: {:5.4f}"""
+                .format(epoch, num_epochs, tags[i][:3].upper(), losses[i],
+                        np.exp(losses[i])))
 
         # Save the model checkpoints
         torch.save(
@@ -169,6 +163,108 @@ def main(args):
         torch.save(
             encoder.state_dict(),
             os.path.join(args.model_path, 'encoder-{}.ckpt'.format(epoch + 1)))
+
+
+def val_factual(encoder, decoder, criterion, data_loader):
+    decoder.eval()
+    encoder.eval()
+
+    batch_time = AverageMeter()
+    losses = AverageMeter()
+    top5accs = AverageMeter()
+    start = time.time()
+
+    for i, (images, captions, lengths) in enumerate(data_loader):
+        # Set mini-batch dataset
+        images = images.to(device)
+        captions = captions.to(device)
+        targets = pack_padded_sequence(input=captions,
+                                       lengths=lengths,
+                                       batch_first=True)[0]
+        # Forward, backward and optimize
+        features = encoder(images)
+        outputs = decoder(captions, lengths, features)
+        loss = criterion(outputs, targets)
+
+        # Keep track of metrics
+        losses.update(loss.item(), sum(lengths))
+        top5 = accuracy(outputs, targets, 5)
+        top5accs.update(top5, sum(lengths))
+        batch_time.update(time.time() - start)
+
+    return batch_time.val, top5accs.avg, losses.avg
+
+
+def train_factual(encoder, decoder, optimizer, criterion, data_loader,
+                  log_step):
+    decoder.train()
+    encoder.train()
+
+    batch_time = AverageMeter()
+    losses = AverageMeter()
+    start = time.time()
+
+    for i, (images, captions, lengths) in enumerate(data_loader):
+        # Set mini-batch dataset
+        images = images.to(device)
+        captions = captions.to(device)
+        targets = pack_padded_sequence(input=captions,
+                                       lengths=lengths,
+                                       batch_first=True)[0]
+        # Forward, backward and optimize
+        features = encoder(images)
+        outputs = decoder(captions, lengths, features)
+        loss = criterion(outputs, targets)
+        decoder.zero_grad()
+        encoder.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        if i % log_step == 0:
+            print("""Step [{}/{}], [FAC], Loss: {:.4f}""".format(
+                i, len(data_loader), loss.item()))
+
+        # Keep track of metrics
+        losses.update(loss.item(), sum(lengths))
+        batch_time.update(time.time() - start)
+
+    return batch_time.val, losses.avg
+
+
+def train_emotion(encoder, decoder, optimizer, criterion, data_loaders, tags,
+                  log_step):
+    decoder.train()
+    encoder.train()
+
+    batch_time = AverageMeter()
+    losses = [AverageMeter() for _ in range(len(tags))]
+    start = time.time()
+
+    for j in random.sample([i for i in range(len(tags))], len(tags)):
+        for i, (images, captions, lengths) in enumerate(data_loaders[j]):
+            # Set mini-batch dataset
+            images = images.to(device)
+            captions = captions.to(device)
+            targets = pack_padded_sequence(input=captions,
+                                           lengths=lengths,
+                                           batch_first=True)[0]
+            # Forward, backward and optimize
+            features = encoder(images)
+            outputs = decoder(captions, lengths, features, mode=tags[j])
+            loss = criterion(outputs, targets)
+            decoder.zero_grad()
+            # encoder.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            if i % log_step == 0:
+                print("""Step [{}/{}], [{}], Loss: {:.4f}""".format(
+                    i, len(data_loaders[j]), tags[j][:3].upper(), loss.item()))
+            # Keep track of metrics
+            losses[j].update(loss.item(), sum(lengths))
+            batch_time.update(time.time() - start)
+
+    return batch_time.val, [loss.avg for loss in losses]
 
 
 if __name__ == '__main__':
@@ -215,6 +311,7 @@ if __name__ == '__main__':
                         help='path for train txt file')
 
     parser.add_argument('--log_step', type=int, default=50)
+    parser.add_argument('--log_step_emotion', type=int, default=5)
     parser.add_argument('--crop_size', type=int, default=224)
 
     # Model parameters

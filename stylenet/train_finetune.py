@@ -293,7 +293,7 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
     top5accs = [AverageMeter() for _ in range(len(tags))]
     start = time.time()
 
-    for j in random.sample([i for i in range(len(tags))], len(tags)):
+    for j in range(len(tags)):
         for i, (images, captions, lengths) in enumerate(data_loaders[j]):
             # Set mini-batch dataset
             images = images.to(device)

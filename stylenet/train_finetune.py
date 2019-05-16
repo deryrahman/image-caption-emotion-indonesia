@@ -41,6 +41,7 @@ def main(args):
     embed_size = args.embed_size
     hidden_size = args.hidden_size
     factored_size = args.factored_size
+    dropout = args.dropout
 
     lr_caption = args.lr_caption
     lr_language = args.lr_language
@@ -125,8 +126,12 @@ def main(args):
 
     # Build the models
     encoder = EncoderCNN(embed_size).to(device)
-    decoder = DecoderFactoredLSTM(embed_size, hidden_size, factored_size,
-                                  len(vocab), 1).to(device)
+    decoder = DecoderFactoredLSTM(embed_size,
+                                  hidden_size,
+                                  factored_size,
+                                  len(vocab),
+                                  1,
+                                  dropout=dropout).to(device)
 
     # Loss and optimizer
     criterion = nn.CrossEntropyLoss()
@@ -430,6 +435,7 @@ if __name__ == '__main__':
     parser.add_argument('--embed_size', type=int, default=300)
     parser.add_argument('--hidden_size', type=int, default=512)
     parser.add_argument('--factored_size', type=int, default=512)
+    parser.add_argument('--dropout', type=float, default=0.22)
 
     parser.add_argument('--num_epochs', type=int, default=30)
     parser.add_argument('--num_workers', type=int, default=4)

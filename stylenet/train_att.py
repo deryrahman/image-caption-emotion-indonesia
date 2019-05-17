@@ -9,7 +9,7 @@ import time
 from data_loader import get_loader
 from build_vocab import Vocabulary
 from model_att import EncoderCNN, DecoderFactoredLSTMAtt
-from torch.nn.utils.rnn import pack_padded_sequence
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, PackedSequence
 from torchvision import transforms
 from utils import AverageMeter, accuracy, adjust_learning_rate, clip_gradient
 from nltk.translate.bleu_score import corpus_bleu
@@ -272,9 +272,10 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
         images = images.to(device)
         captions = captions.to(device)
         lengths = [l - 1 for l in lengths]
-        targets = pack_padded_sequence(input=captions[:, 1:],
-                                       lengths=lengths,
-                                       batch_first=True)[0]
+        packed_targets = pack_padded_sequence(input=captions,
+                                              lengths=lengths,
+                                              batch_first=True)
+        targets = packed_targets.data
         # Forward, backward and optimize
         features = encoder(images)
         outputs, alphas = decoder(captions[:, :-1],
@@ -293,12 +294,8 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
         batch_time.update(time.time() - start)
 
         # unpacked outputs
-        outputs_list = outputs.clone()
-        scores = []
-        for l in lengths:
-            out = outputs_list[:l, :]
-            outputs_list = outputs_list[l:, :]
-            scores.append(out)
+        outputs = PackedSequence(outputs, packed_targets.batch_sizes)
+        scores = pad_packed_sequence(outputs, batch_first=True)
 
         start = vocab.word2idx['<start>']
         end = vocab.word2idx['<end>']
@@ -308,9 +305,9 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
             references.append(caps)
 
         preds = list()
-        for s in scores:
+        for s, l in zip(scores[0], scores[1]):
             _, pred = torch.max(s, dim=1)
-            pred = pred.tolist()
+            pred = pred.tolist()[:l]
             pred = [w for w in pred if w != start and w != end]
             preds.append(pred)
         hypotheses.extend(preds)
@@ -404,9 +401,10 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
             images = images.to(device)
             captions = captions.to(device)
             lengths = [l - 1 for l in lengths]
-            targets = pack_padded_sequence(input=captions[:, 1:],
-                                           lengths=lengths,
-                                           batch_first=True)[0]
+            packed_targets = pack_padded_sequence(input=captions,
+                                                  lengths=lengths,
+                                                  batch_first=True)
+            targets = packed_targets.data
             # Forward, backward and optimize
             features = encoder(images)
             outputs, alphas = decoder(captions[:, :-1],
@@ -425,12 +423,8 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
             batch_time.update(time.time() - start)
 
             # unpacked outputs
-            outputs_list = outputs.clone()
-            scores = []
-            for l in lengths:
-                out = outputs_list[:l, :]
-                outputs_list = outputs_list[l:, :]
-                scores.append(out)
+            outputs = PackedSequence(outputs, packed_targets.batch_sizes)
+            scores = pad_packed_sequence(outputs, batch_first=True)
 
             start = vocab.word2idx['<start>']
             end = vocab.word2idx['<end>']
@@ -440,9 +434,9 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
                 references.append(caps)
 
             preds = list()
-            for s in scores:
+            for s, l in zip(scores[0], scores[1]):
                 _, pred = torch.max(s, dim=1)
-                pred = pred.tolist()
+                pred = pred.tolist()[:l]
                 pred = [w for w in pred if w != start and w != end]
                 preds.append(pred)
             hypotheses.extend(preds)

@@ -12,6 +12,7 @@ from model_att import EncoderCNN, DecoderFactoredLSTMAtt
 from torch.nn.utils.rnn import pack_padded_sequence
 from torchvision import transforms
 from utils import AverageMeter, accuracy
+from nltk.translate.bleu_score import corpus_bleu
 # from validate import validate
 
 # Device configuration
@@ -151,13 +152,13 @@ def main(args):
     tags = ['happy', 'sad', 'angry']
 
     for epoch in range(num_epochs):
-        # # train factual
-        # res = train_factual(encoder=encoder,
-        #                     decoder=decoder,
-        #                     optimizer=optimizer,
-        #                     criterion=criterion,
-        #                     data_loader=data_loader,
-        #                     log_step=log_step)
+        # train factual
+        res = train_factual(encoder=encoder,
+                            decoder=decoder,
+                            optimizer=optimizer,
+                            criterion=criterion,
+                            data_loader=data_loader,
+                            log_step=log_step)
 
         val_res = val_factual(encoder=encoder,
                               decoder=decoder,
@@ -165,10 +166,11 @@ def main(args):
                               criterion=criterion,
                               data_loader=val_data_loader)
         batch_time, loss = res
-        val_batch_time, top5, loss_val = val_res
+        val_batch_time, top5, loss_val, bleu4 = val_res
         batch_time += val_batch_time
-        print("""Epoch [{}/{}], [FAC], Batch Time: {:.3f}, Top-5 Acc: {:.3f}""".
-              format(epoch, num_epochs, batch_time, top5))
+        print(
+            """Epoch [{}/{}], [FAC], Batch Time: {:.3f}, Top-5 Acc: {:.3f}, BLEU-4 Score: {}"""
+            .format(epoch, num_epochs, batch_time, top5, bleu4))
         print("""\tTrain Loss: {:.4f} | Train Perplexity: {:5.4f}""".format(
             loss, np.exp(loss)))
         print("""\tVal   Loss: {:.4f} | Val   Perplexity: {:5.4f}""".format(
@@ -189,14 +191,14 @@ def main(args):
                               criterion=criterion,
                               data_loaders=val_data_loaders,
                               tags=tags)
-        val_batch_time, top5accs, losses_val = val_res
+        val_batch_time, top5accs, losses_val, bleu4s = val_res
         batch_time += val_batch_time
         print("""Batch Time: {:.3f}""".format(batch_time))
         for i in range(len(tags)):
             print(
-                """Epoch [{}/{}], [{}], Batch Time: {:.3f}, Top-5 Acc: {:.3f}"""
+                """Epoch [{}/{}], [{}], Batch Time: {:.3f}, Top-5 Acc: {:.3f}, , BLEU-4 Score: {}"""
                 .format(epoch, num_epochs, tags[i][:3].upper(), batch_time,
-                        top5accs[i]))
+                        top5accs[i], bleu4s[i]))
             print("""\tTrain Loss: {:.4f} | Train Perplexity: {:5.4f}""".format(
                 losses[i], np.exp(losses[i])))
             print("""\tVal   Loss: {:.4f} | Val   Perplexity: {:5.4f}""".format(
@@ -268,16 +270,11 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
             preds.append(pred.tolist())
         hypotheses.extend(preds)
 
-        for r in references:
-            print(r)
-
-        for h in hypotheses:
-            print(h)
-
         assert len(references) == len(hypotheses)
+        print('done')
 
     # Calculate BLEU-4 scores
-    # bleu4 = corpus_bleu(references, hypotheses)
+    bleu4 = corpus_bleu(references, hypotheses)
 
     feature = features[0].unsqueeze(0)
     start_token = vocab.word2idx['<start>']
@@ -297,7 +294,7 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
 
     print(sampled_caption)
 
-    return batch_time.val, top5accs.avg, losses.avg
+    return batch_time.val, top5accs.avg, losses.avg, bleu4
 
 
 def train_factual(encoder, decoder, optimizer, criterion, data_loader,
@@ -346,9 +343,15 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
     batch_time = AverageMeter()
     losses = [AverageMeter() for _ in range(len(tags))]
     top5accs = [AverageMeter() for _ in range(len(tags))]
+    bleu4s = []
     start = time.time()
 
     for j in range(len(tags)):
+
+        # references (true captions) for calculating BLEU-4 score
+        references = list()
+        # hypotheses (predictions)
+        hypotheses = list()
         for i, (images, captions, lengths,
                 all_captions) in enumerate(data_loaders[j]):
             # Set mini-batch dataset
@@ -375,6 +378,31 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
             top5accs[j].update(top5, sum(lengths))
             batch_time.update(time.time() - start)
 
+            # unpacked outputs
+            outputs_list = outputs.clone()
+            scores = []
+            for l in lengths:
+                out = outputs_list[:l, :]
+                outputs_list = outputs_list[l:, :]
+                scores.append(out)
+
+            for caps in all_captions:
+                caps = [c.long().tolist() for c in caps]
+                references.append(caps)
+
+            preds = list()
+            for s in scores:
+                _, pred = torch.max(s, dim=1)
+                preds.append(pred.tolist())
+            hypotheses.extend(preds)
+
+            assert len(references) == len(hypotheses)
+            print('done')
+
+        # Calculate BLEU-4 scores
+        bleu4 = corpus_bleu(references, hypotheses)
+        bleu4s.append(bleu4)
+
         feature = features[0].unsqueeze(0)
 
         start_token = vocab.word2idx['<start>']
@@ -397,7 +425,7 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
 
     top5accs = [top5acc.avg for top5acc in top5accs]
     losses = [loss.avg for loss in losses]
-    return batch_time.val, top5accs, losses
+    return batch_time.val, top5accs, losses, bleu4s
 
 
 def train_emotion(encoder, decoder, optimizer, criterion, data_loaders, tags,

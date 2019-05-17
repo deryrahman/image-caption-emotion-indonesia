@@ -308,7 +308,6 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
         hypotheses.extend(preds)
 
         assert len(references) == len(hypotheses)
-        print('done')
 
     # Calculate BLEU-4 scores
     bleu4 = corpus_bleu(references, hypotheses)
@@ -434,7 +433,6 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
             hypotheses.extend(preds)
 
             assert len(references) == len(hypotheses)
-            print('done')
 
         # Calculate BLEU-4 scores
         bleu4 = corpus_bleu(references, hypotheses)

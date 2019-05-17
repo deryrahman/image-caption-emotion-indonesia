@@ -135,7 +135,16 @@ def main(args):
         print("""\tVal   Loss: {:.4f} | Val   Perplexity: {:5.4f}""".format(
             loss_val, np.exp(loss_val)))
 
-        if mode != 'factual':
+        # Save the model checkpoints
+        torch.save(
+            decoder.state_dict(),
+            os.path.join(args.model_path, 'decoder-{}.ckpt'.format(epoch + 1)))
+        torch.save(
+            encoder.state_dict(),
+            os.path.join(args.model_path, 'encoder-{}.ckpt'.format(epoch + 1)))
+
+    if mode != 'factual':
+        for epoch in range(num_epochs):
             # train style
             res = train(encoder=encoder,
                         decoder=decoder,

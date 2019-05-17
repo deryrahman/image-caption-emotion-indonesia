@@ -218,7 +218,7 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
     top5accs = AverageMeter()
     start = time.time()
 
-    for i, (images, captions, lengths) in enumerate(data_loader):
+    for i, (images, captions, lengths, _) in enumerate(data_loader):
         # Set mini-batch dataset
         images = images.to(device)
         captions = captions.to(device)
@@ -262,7 +262,7 @@ def train_factual(encoder, decoder, optimizer, criterion, data_loader,
     losses = AverageMeter()
     start = time.time()
 
-    for i, (images, captions, lengths) in enumerate(data_loader):
+    for i, (images, captions, lengths, _) in enumerate(data_loader):
         # Set mini-batch dataset
         images = images.to(device)
         captions = captions.to(device)
@@ -299,7 +299,7 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
     start = time.time()
 
     for j in range(len(tags)):
-        for i, (images, captions, lengths) in enumerate(data_loaders[j]):
+        for i, (images, captions, lengths, _) in enumerate(data_loaders[j]):
             # Set mini-batch dataset
             images = images.to(device)
             captions = captions.to(device)
@@ -351,7 +351,7 @@ def train_emotion(encoder, decoder, optimizer, criterion, data_loaders, tags,
     start = time.time()
 
     for j in random.sample([i for i in range(len(tags))], len(tags)):
-        for i, (images, captions, lengths) in enumerate(data_loaders[j]):
+        for i, (images, captions, lengths, _) in enumerate(data_loaders[j]):
             # Set mini-batch dataset
             images = images.to(device)
             captions = captions.to(device)

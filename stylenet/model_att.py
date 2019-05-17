@@ -367,7 +367,12 @@ class DecoderFactoredLSTMAtt(nn.Module):
             if step > self.max_seq_length:
                 break
             step += 1
+
+        # prevent empty sequence
+        if len(complete_seqs_scores) == 0:
+            return torch.Tensor([[end_token]]).long().to(device)
+
         i = complete_seqs_scores.index(max(complete_seqs_scores))
-        seq = complete_seqs[i]
+        seq = torch.Tensor([complete_seqs[i]]).long().to(device)
 
         return seq

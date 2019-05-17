@@ -151,13 +151,13 @@ def main(args):
     tags = ['happy', 'sad', 'angry']
 
     for epoch in range(num_epochs):
-        # train factual
-        res = train_factual(encoder=encoder,
-                            decoder=decoder,
-                            optimizer=optimizer,
-                            criterion=criterion,
-                            data_loader=data_loader,
-                            log_step=log_step)
+        # # train factual
+        # res = train_factual(encoder=encoder,
+        #                     decoder=decoder,
+        #                     optimizer=optimizer,
+        #                     criterion=criterion,
+        #                     data_loader=data_loader,
+        #                     log_step=log_step)
 
         val_res = val_factual(encoder=encoder,
                               decoder=decoder,
@@ -220,7 +220,12 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
     top5accs = AverageMeter()
     start = time.time()
 
-    for i, (images, captions, lengths) in enumerate(data_loader):
+    # references (true captions) for calculating BLEU-4 score
+    references = list()
+    # hypotheses (predictions)
+    hypotheses = list()
+
+    for i, (images, captions, lengths, all_captions) in enumerate(data_loader):
         # Set mini-batch dataset
         images = images.to(device)
         captions = captions.to(device)
@@ -234,6 +239,7 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
                                   lengths,
                                   features,
                                   teacher_forcing_ratio=0)
+
         loss = criterion(outputs, targets)
         alpha_c = 1.
         loss += alpha_c * ((1. - alphas.sum(dim=1))**2).mean()
@@ -243,6 +249,35 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
         top5 = accuracy(outputs, targets, 5)
         top5accs.update(top5, sum(lengths))
         batch_time.update(time.time() - start)
+
+        # unpacked outputs
+        outputs_list = outputs.clone()
+        scores = []
+        for l in lengths:
+            out = outputs_list[:l, :]
+            outputs_list = outputs_list[l:, :]
+            scores.append(out)
+
+        for caps in all_captions:
+            caps = [c.long().tolist() for c in caps]
+            references.append(caps)
+
+        preds = list()
+        for s in scores:
+            _, pred = torch.max(s, dim=1)
+            preds.append(pred.tolist())
+        hypotheses.extend(preds)
+
+        for r in references:
+            print(r)
+
+        for h in hypotheses:
+            print(h)
+
+        assert len(references) == len(hypotheses)
+
+    # Calculate BLEU-4 scores
+    # bleu4 = corpus_bleu(references, hypotheses)
 
     feature = features[0].unsqueeze(0)
     start_token = vocab.word2idx['<start>']
@@ -274,7 +309,7 @@ def train_factual(encoder, decoder, optimizer, criterion, data_loader,
     losses = AverageMeter()
     start = time.time()
 
-    for i, (images, captions, lengths) in enumerate(data_loader):
+    for i, (images, captions, lengths, _) in enumerate(data_loader):
         # Set mini-batch dataset
         images = images.to(device)
         captions = captions.to(device)
@@ -314,7 +349,8 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
     start = time.time()
 
     for j in range(len(tags)):
-        for i, (images, captions, lengths) in enumerate(data_loaders[j]):
+        for i, (images, captions, lengths,
+                all_captions) in enumerate(data_loaders[j]):
             # Set mini-batch dataset
             images = images.to(device)
             captions = captions.to(device)
@@ -374,7 +410,7 @@ def train_emotion(encoder, decoder, optimizer, criterion, data_loaders, tags,
     start = time.time()
 
     for j in random.sample([i for i in range(len(tags))], len(tags)):
-        for i, (images, captions, lengths) in enumerate(data_loaders[j]):
+        for i, (images, captions, lengths, _) in enumerate(data_loaders[j]):
             # Set mini-batch dataset
             images = images.to(device)
             captions = captions.to(device)

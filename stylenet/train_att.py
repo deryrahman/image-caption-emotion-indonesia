@@ -11,13 +11,16 @@ from build_vocab import Vocabulary
 from model_att import EncoderCNN, DecoderFactoredLSTMAtt
 from torch.nn.utils.rnn import pack_padded_sequence
 from torchvision import transforms
-from utils import AverageMeter, accuracy
+from utils import AverageMeter, accuracy, adjust_learning_rate
 from nltk.translate.bleu_score import corpus_bleu
 # from validate import validate
 
 # Device configuration
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 random.seed(0)
+
+# resolve pytorch share multiprocess
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 
 def main(args):
@@ -152,7 +155,20 @@ def main(args):
     ]
     tags = ['happy', 'sad', 'angry']
 
+    epochs_since_improvement = {'factual': 0, 'emotion': 0}
+    best_bleu4 = {'factual': 0., 'emotion': 0.}
     for epoch in range(num_epochs):
+
+        # Decay learning rate if there is no improvement for 3 consecutive epochs, and terminate training after 10
+        imp_fac = epochs_since_improvement['factual']
+        imp_emo = epochs_since_improvement['emotion']
+        if imp_fac >= 10 and imp_emo >= 10:
+            break
+        if imp_fac > 0 and imp_fac % 3 == 0:
+            adjust_learning_rate(optimizer, 0.8)
+        if imp_emo > 0 and imp_emo % 3 == 0:
+            adjust_learning_rate(lang_optimizer, 0.8)
+
         # train factual
         res = train_factual(encoder=encoder,
                             decoder=decoder,
@@ -177,6 +193,15 @@ def main(args):
             loss_val, np.exp(loss_val))
         print(text)
         open(log_path, 'a+').write(text)
+
+        is_best = bleu4 > best_bleu4['factual']
+        best_bleu4['factual'] = max(bleu4, best_bleu4['factual'])
+        if not is_best:
+            epochs_since_improvement['factual'] += 1
+            print("Epochs [FAC] since last improvement:",
+                  epochs_since_improvement['factual'])
+        else:
+            epochs_since_improvement['factual'] = 0
 
         # train style
         res = train_emotion(encoder=encoder,
@@ -205,6 +230,16 @@ def main(args):
                 losses_val[i], np.exp(losses_val[i]))
         print(text)
         open(log_path, 'a+').write(text)
+
+        bleu4 = sum(bleu4s) / len(bleu4s)
+        is_best = bleu4 > best_bleu4['emotion']
+        best_bleu4['emotion'] = max(bleu4, best_bleu4['emotion'])
+        if not is_best:
+            epochs_since_improvement['emotion'] += 1
+            print("Epochs [EMO] since last improvement:",
+                  epochs_since_improvement['emotion'])
+        else:
+            epochs_since_improvement['emotion'] = 0
 
         # Save the model checkpoints
         torch.save(

@@ -11,19 +11,25 @@ from build_vocab import Vocabulary
 from model import EncoderCNN, DecoderFactoredLSTM
 from torch.nn.utils.rnn import pack_padded_sequence
 from torchvision import transforms
-from utils import AverageMeter, accuracy
+from utils import AverageMeter, accuracy, adjust_learning_rate, clip_gradient
+from nltk.translate.bleu_score import corpus_bleu
 # from validate import validate
 
 # Device configuration
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 random.seed(0)
 
+# resolve pytorch share multiprocess
+torch.multiprocessing.set_sharing_strategy('file_system')
+
 
 def main(args):
+    log_path = args.log_path
     model_path = args.model_path
     crop_size = args.crop_size
     vocab_path = args.vocab_path
     num_workers = args.num_workers
+    grad_clip = args.grad_clip
 
     image_dir = args.image_dir
     caption_path = args.caption_path
@@ -55,7 +61,7 @@ def main(args):
 
     # Image preprocessing, normalization for the pretrained resnet
     transform = transforms.Compose([
-        transforms.Resize((224, 224)),
+        transforms.Resize((336, 336)),
         transforms.RandomCrop(crop_size),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
@@ -148,14 +154,28 @@ def main(args):
     ]
     tags = ['happy', 'sad', 'angry']
 
+    epochs_since_improvement = {'factual': 0, 'emotion': 0}
+    best_bleu4 = {'factual': 0., 'emotion': 0.}
     for epoch in range(num_epochs):
+
+        # Decay learning rate if there is no improvement for 8 consecutive epochs, and terminate training after 20
+        imp_fac = epochs_since_improvement['factual']
+        imp_emo = epochs_since_improvement['emotion']
+        if imp_fac >= 20 and imp_emo >= 20:
+            break
+        if imp_fac > 0 and imp_fac % 8 == 0:
+            adjust_learning_rate(optimizer, 0.8)
+        if imp_emo > 0 and imp_emo % 8 == 0:
+            adjust_learning_rate(lang_optimizer, 0.8)
+
         # train factual
         res = train_factual(encoder=encoder,
                             decoder=decoder,
                             optimizer=optimizer,
                             criterion=criterion,
                             data_loader=data_loader,
-                            log_step=log_step)
+                            log_step=log_step,
+                            grad_clip=grad_clip)
 
         val_res = val_factual(encoder=encoder,
                               decoder=decoder,
@@ -163,14 +183,25 @@ def main(args):
                               criterion=criterion,
                               data_loader=val_data_loader)
         batch_time, loss = res
-        val_batch_time, top5, loss_val = val_res
+        val_batch_time, top5, loss_val, bleu4 = val_res
         batch_time += val_batch_time
-        print("""Epoch [{}/{}], [FAC], Batch Time: {:.3f}, Top-5 Acc: {:.3f}""".
-              format(epoch, num_epochs, batch_time, top5))
-        print("""\tTrain Loss: {:.4f} | Train Perplexity: {:5.4f}""".format(
-            loss, np.exp(loss)))
-        print("""\tVal   Loss: {:.4f} | Val   Perplexity: {:5.4f}""".format(
-            loss_val, np.exp(loss_val)))
+        text = """Epoch [{}/{}], [FAC], Batch Time: {:.3f}, Top-5 Acc: {:.3f}, BLEU-4 Score: {}\n""".format(
+            epoch, num_epochs, batch_time, top5, bleu4)
+        text += """\tTrain Loss: {:.4f} | Train Perplexity: {:5.4f}\n""".format(
+            loss, np.exp(loss))
+        text += """\tVal   Loss: {:.4f} | Val   Perplexity: {:5.4f}\n""".format(
+            loss_val, np.exp(loss_val))
+        print(text)
+        open(log_path, 'a+').write(text)
+
+        is_best = bleu4 > best_bleu4['factual']
+        best_bleu4['factual'] = max(bleu4, best_bleu4['factual'])
+        if not is_best:
+            epochs_since_improvement['factual'] += 1
+            print("Epochs [FAC] since last improvement:",
+                  epochs_since_improvement['factual'])
+        else:
+            epochs_since_improvement['factual'] = 0
 
         # train style
         res = train_emotion(encoder=encoder,
@@ -179,7 +210,8 @@ def main(args):
                             criterion=criterion,
                             data_loaders=data_loaders,
                             tags=tags,
-                            log_step=log_step_emotion)
+                            log_step=log_step_emotion,
+                            grad_clip=grad_clip)
         batch_time, losses = res
         val_res = val_emotion(encoder=encoder,
                               decoder=decoder,
@@ -187,18 +219,28 @@ def main(args):
                               criterion=criterion,
                               data_loaders=val_data_loaders,
                               tags=tags)
-        val_batch_time, top5accs, losses_val = val_res
+        val_batch_time, top5accs, losses_val, bleu4s = val_res
         batch_time += val_batch_time
-        print("""Batch Time: {:.3f}""".format(batch_time))
+        text = """Batch Time: {:.3f}\n""".format(batch_time)
         for i in range(len(tags)):
-            print(
-                """Epoch [{}/{}], [{}], Batch Time: {:.3f}, Top-5 Acc: {:.3f}"""
-                .format(epoch, num_epochs, tags[i][:3].upper(), batch_time,
-                        top5accs[i]))
-            print("""\tTrain Loss: {:.4f} | Train Perplexity: {:5.4f}""".format(
-                losses[i], np.exp(losses[i])))
-            print("""\tVal   Loss: {:.4f} | Val   Perplexity: {:5.4f}""".format(
-                losses_val[i], np.exp(losses_val[i])))
+            text += """Epoch [{}/{}], [{}], Top-5 Acc: {:.3f}, , BLEU-4 Score: {}\n""".format(
+                epoch, num_epochs, tags[i][:3].upper(), top5accs[i], bleu4s[i])
+            text += """\tTrain Loss: {:.4f} | Train Perplexity: {:5.4f}\n""".format(
+                losses[i], np.exp(losses[i]))
+            text += """\tVal   Loss: {:.4f} | Val   Perplexity: {:5.4f}\n""".format(
+                losses_val[i], np.exp(losses_val[i]))
+        print(text)
+        open(log_path, 'a+').write(text)
+
+        bleu4 = sum(bleu4s) / len(bleu4s)
+        is_best = bleu4 > best_bleu4['emotion']
+        best_bleu4['emotion'] = max(bleu4, best_bleu4['emotion'])
+        if not is_best:
+            epochs_since_improvement['emotion'] += 1
+            print("Epochs [EMO] since last improvement:",
+                  epochs_since_improvement['emotion'])
+        else:
+            epochs_since_improvement['emotion'] = 0
 
         # Save the model checkpoints
         torch.save(
@@ -218,7 +260,12 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
     top5accs = AverageMeter()
     start = time.time()
 
-    for i, (images, captions, lengths, _) in enumerate(data_loader):
+    # references (true captions) for calculating BLEU-4 score
+    references = list()
+    # hypotheses (predictions)
+    hypotheses = list()
+
+    for i, (images, captions, lengths, all_captions) in enumerate(data_loader):
         # Set mini-batch dataset
         images = images.to(device)
         captions = captions.to(device)
@@ -236,6 +283,34 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
         top5accs.update(top5, sum(lengths))
         batch_time.update(time.time() - start)
 
+        # unpacked outputs
+        outputs_list = outputs.clone()
+        scores = []
+        for l in lengths:
+            out = outputs_list[:l, :]
+            outputs_list = outputs_list[l:, :]
+            scores.append(out)
+
+        start = vocab.word2idx['<start>']
+        end = vocab.word2idx['<end>']
+        for caps in all_captions:
+            caps = [c.long().tolist() for c in caps]
+            caps = [[w for w in c if w != start and w != end] for c in caps]
+            references.append(caps)
+
+        preds = list()
+        for s in scores:
+            _, pred = torch.max(s, dim=1)
+            pred = pred.tolist()
+            pred = [w for w in pred if w != start and w != end]
+            preds.append(pred)
+        hypotheses.extend(preds)
+
+        assert len(references) == len(hypotheses)
+
+    # Calculate BLEU-4 scores
+    bleu4 = corpus_bleu(references, hypotheses)
+
     feature = features[0].unsqueeze(0)
     sampled_ids = decoder.sample(feature)
     sampled_ids = sampled_ids[0].cpu().numpy()
@@ -250,11 +325,11 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
 
     print(sampled_caption)
 
-    return batch_time.val, top5accs.avg, losses.avg
+    return batch_time.val, top5accs.avg, losses.avg, bleu4
 
 
-def train_factual(encoder, decoder, optimizer, criterion, data_loader,
-                  log_step):
+def train_factual(encoder, decoder, optimizer, criterion, data_loader, log_step,
+                  grad_clip):
     decoder.train()
     encoder.train()
 
@@ -276,6 +351,8 @@ def train_factual(encoder, decoder, optimizer, criterion, data_loader,
         decoder.zero_grad()
         encoder.zero_grad()
         loss.backward()
+        # Clip gradients
+        clip_gradient(optimizer, grad_clip)
         optimizer.step()
 
         if i % log_step == 0:
@@ -296,10 +373,16 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
     batch_time = AverageMeter()
     losses = [AverageMeter() for _ in range(len(tags))]
     top5accs = [AverageMeter() for _ in range(len(tags))]
+    bleu4s = []
     start = time.time()
 
     for j in range(len(tags)):
-        for i, (images, captions, lengths, _) in enumerate(data_loaders[j]):
+        # references (true captions) for calculating BLEU-4 score
+        references = list()
+        # hypotheses (predictions)
+        hypotheses = list()
+        for i, (images, captions, lengths,
+                all_captions) in enumerate(data_loaders[j]):
             # Set mini-batch dataset
             images = images.to(device)
             captions = captions.to(device)
@@ -321,6 +404,34 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
             top5accs[j].update(top5, sum(lengths))
             batch_time.update(time.time() - start)
 
+            # unpacked outputs
+            outputs_list = outputs.clone()
+            scores = []
+            for l in lengths:
+                out = outputs_list[:l, :]
+                outputs_list = outputs_list[l:, :]
+                scores.append(out)
+
+            start = vocab.word2idx['<start>']
+            end = vocab.word2idx['<end>']
+            for caps in all_captions:
+                caps = [c.long().tolist() for c in caps]
+                caps = [[w for w in c if w != start and w != end] for c in caps]
+                references.append(caps)
+
+            preds = list()
+            for s in scores:
+                _, pred = torch.max(s, dim=1)
+                pred = pred.tolist()
+                pred = [w for w in pred if w != start and w != end]
+                preds.append(pred)
+            hypotheses.extend(preds)
+
+            assert len(references) == len(hypotheses)
+
+        # Calculate BLEU-4 scores
+        bleu4 = corpus_bleu(references, hypotheses)
+        bleu4s.append(bleu4)
         feature = features[0].unsqueeze(0)
 
         sampled_ids = decoder.sample(feature, mode=tags[j])
@@ -338,11 +449,11 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
 
     top5accs = [top5acc.avg for top5acc in top5accs]
     losses = [loss.avg for loss in losses]
-    return batch_time.val, top5accs, losses
+    return batch_time.val, top5accs, losses, bleu4s
 
 
 def train_emotion(encoder, decoder, optimizer, criterion, data_loaders, tags,
-                  log_step):
+                  log_step, grad_clip):
     decoder.train()
     encoder.train()
 
@@ -365,6 +476,8 @@ def train_emotion(encoder, decoder, optimizer, criterion, data_loaders, tags,
             decoder.zero_grad()
             # encoder.zero_grad()
             loss.backward()
+            # Clip gradients
+            clip_gradient(optimizer, grad_clip)
             optimizer.step()
 
             if i % log_step == 0:
@@ -381,6 +494,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     # Path related
+    parser.add_argument('--log_path',
+                        type=str,
+                        default='out.log',
+                        help='path for logging')
     parser.add_argument('--model_path',
                         type=str,
                         default='models/',
@@ -430,14 +547,15 @@ if __name__ == '__main__':
     parser.add_argument('--log_step', type=int, default=50)
     parser.add_argument('--log_step_emotion', type=int, default=5)
     parser.add_argument('--crop_size', type=int, default=224)
+    parser.add_argument('--grad_clip', type=float, default=0.5)
 
     # Model parameters
     parser.add_argument('--embed_size', type=int, default=300)
     parser.add_argument('--hidden_size', type=int, default=512)
     parser.add_argument('--factored_size', type=int, default=512)
-    parser.add_argument('--dropout', type=float, default=0.22)
+    parser.add_argument('--dropout', type=float, default=0.5)
 
-    parser.add_argument('--num_epochs', type=int, default=30)
+    parser.add_argument('--num_epochs', type=int, default=120)
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--caption_batch_size', type=int, default=64)
     parser.add_argument('--language_batch_size', type=int, default=96)

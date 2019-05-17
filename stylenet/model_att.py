@@ -89,6 +89,10 @@ class DecoderFactoredLSTMAtt(nn.Module):
         self.hidden_size = hidden_size
         self.vocab_size = vocab_size
         self.max_seq_length = max_seq_length
+        # linear layer to find initial hidden state
+        self.init_h = nn.Linear(feature_size, hidden_size)
+        # linear layer to find initial cell state
+        self.init_c = nn.Linear(feature_size, hidden_size)
 
         # dropout
         self.dropout = nn.Dropout(dropout)
@@ -154,6 +158,7 @@ class DecoderFactoredLSTMAtt(nn.Module):
         self.C = nn.Linear(hidden_size, vocab_size, bias=bias)
 
         self.reset_parameters()
+        self.init_weights()
 
     def reset_parameters(self):
         # std = 1.0 / math.sqrt(self.hidden_size)
@@ -163,13 +168,28 @@ class DecoderFactoredLSTMAtt(nn.Module):
             else:
                 nn.init.zeros_(p.data)
 
+    def init_weights(self):
+        """
+        Initializes some parameters with values from the uniform distribution, for easier convergence.
+        """
+        self.B.weight.data.uniform_(-0.1, 0.1)
+        self.C.bias.data.fill_(0)
+        self.C.weight.data.uniform_(-0.1, 0.1)
+
+    def init_hidden_state(self, feature):
+        """
+        Creates the initial hidden and cell states for the decoder's LSTM based on the encoded images.
+        :param feature: encoded images, a tensor of dimension (batch_size, num_pixels, encoder_dim)
+        :return: hidden state, cell state
+        """
+        mean_feature = feature.mean(dim=1)
+        h = self.init_h(mean_feature)  # (batch_size, decoder_dim)
+        c = self.init_c(mean_feature)
+        return h, c
+
     def forward_step(self, embedded, states, mode):
-        batch_size = embedded.size(0)
+        # batch_size = embedded.size(0)
         h_t, c_t = states
-        if h_t is None:
-            h_t = torch.zeros(batch_size, self.hidden_size).to(device)
-        if c_t is None:
-            c_t = torch.zeros(batch_size, self.hidden_size).to(device)
 
         i = self.V_i(embedded)
         f = self.V_f(embedded)
@@ -230,8 +250,8 @@ class DecoderFactoredLSTMAtt(nn.Module):
         pack_padded_sequence = nn.utils.rnn.pack_padded_sequence
         packed = pack_padded_sequence(embeddings, lengths, batch_first=True)
 
-        h_t = torch.zeros(batch_size, self.hidden_size).to(device)
-        c_t = torch.zeros(batch_size, self.hidden_size).to(device)
+        # (batch_size, decoder_dim)
+        h_t, c_t = self.init_hidden_state(features)
         alphas = torch.zeros(batch_size, max(lengths), num_pixels).to(device)
 
         hiddens = []
@@ -277,7 +297,7 @@ class DecoderFactoredLSTMAtt(nn.Module):
 
         # enc_image_size = features.size(1)
         feature_size = features.size(-1)
-        batch_size = features.size(0)
+        # batch_size = features.size(0)
 
         features = features.view(1, -1, feature_size)
         num_pixels = features.size(1)
@@ -294,8 +314,7 @@ class DecoderFactoredLSTMAtt(nn.Module):
 
         # Start decoding
         step = 1
-        h_t = torch.zeros(batch_size, self.hidden_size).to(device)
-        c_t = torch.zeros(batch_size, self.hidden_size).to(device)
+        h_t, c_t = self.init_hidden_state(features)
 
         while True:
             # (s, embed_dim)

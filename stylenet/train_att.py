@@ -11,7 +11,7 @@ from build_vocab import Vocabulary
 from model_att import EncoderCNN, DecoderFactoredLSTMAtt
 from torch.nn.utils.rnn import pack_padded_sequence
 from torchvision import transforms
-from utils import AverageMeter, accuracy, adjust_learning_rate
+from utils import AverageMeter, accuracy, adjust_learning_rate, clip_gradient
 from nltk.translate.bleu_score import corpus_bleu
 # from validate import validate
 
@@ -29,6 +29,7 @@ def main(args):
     crop_size = args.crop_size
     vocab_path = args.vocab_path
     num_workers = args.num_workers
+    grad_clip = args.grad_clip
 
     image_dir = args.image_dir
     caption_path = args.caption_path
@@ -61,7 +62,7 @@ def main(args):
 
     # Image preprocessing, normalization for the pretrained resnet
     transform = transforms.Compose([
-        transforms.Resize((224, 224)),
+        transforms.Resize((336, 336)),
         transforms.RandomCrop(crop_size),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
@@ -159,14 +160,14 @@ def main(args):
     best_bleu4 = {'factual': 0., 'emotion': 0.}
     for epoch in range(num_epochs):
 
-        # Decay learning rate if there is no improvement for 3 consecutive epochs, and terminate training after 10
+        # Decay learning rate if there is no improvement for 8 consecutive epochs, and terminate training after 20
         imp_fac = epochs_since_improvement['factual']
         imp_emo = epochs_since_improvement['emotion']
-        if imp_fac >= 10 and imp_emo >= 10:
+        if imp_fac >= 20 and imp_emo >= 20:
             break
-        if imp_fac > 0 and imp_fac % 3 == 0:
+        if imp_fac > 0 and imp_fac % 8 == 0:
             adjust_learning_rate(optimizer, 0.8)
-        if imp_emo > 0 and imp_emo % 3 == 0:
+        if imp_emo > 0 and imp_emo % 8 == 0:
             adjust_learning_rate(lang_optimizer, 0.8)
 
         # train factual
@@ -175,7 +176,8 @@ def main(args):
                             optimizer=optimizer,
                             criterion=criterion,
                             data_loader=data_loader,
-                            log_step=log_step)
+                            log_step=log_step,
+                            grad_clip=grad_clip)
 
         val_res = val_factual(encoder=encoder,
                               decoder=decoder,
@@ -210,7 +212,8 @@ def main(args):
                             criterion=criterion,
                             data_loaders=data_loaders,
                             tags=tags,
-                            log_step=log_step_emotion)
+                            log_step=log_step_emotion,
+                            grad_clip=grad_clip)
         batch_time, losses = res
         val_res = val_emotion(encoder=encoder,
                               decoder=decoder,
@@ -297,14 +300,19 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
             outputs_list = outputs_list[l:, :]
             scores.append(out)
 
+        start = vocab.word2idx['<start>']
+        end = vocab.word2idx['<end>']
         for caps in all_captions:
             caps = [c.long().tolist() for c in caps]
+            caps = [[w for w in c if w != start and w != end] for c in caps]
             references.append(caps)
 
         preds = list()
         for s in scores:
             _, pred = torch.max(s, dim=1)
-            preds.append(pred.tolist())
+            pred = pred.tolist()
+            pred = [w for w in pred if w != start and w != end]
+            preds.append(pred)
         hypotheses.extend(preds)
 
         assert len(references) == len(hypotheses)
@@ -333,8 +341,8 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
     return batch_time.val, top5accs.avg, losses.avg, bleu4
 
 
-def train_factual(encoder, decoder, optimizer, criterion, data_loader,
-                  log_step):
+def train_factual(encoder, decoder, optimizer, criterion, data_loader, log_step,
+                  grad_clip):
     decoder.train()
     encoder.train()
 
@@ -359,6 +367,8 @@ def train_factual(encoder, decoder, optimizer, criterion, data_loader,
         decoder.zero_grad()
         encoder.zero_grad()
         loss.backward()
+        # Clip gradients
+        clip_gradient(optimizer, grad_clip)
         optimizer.step()
 
         if i % log_step == 0:
@@ -422,14 +432,19 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
                 outputs_list = outputs_list[l:, :]
                 scores.append(out)
 
+            start = vocab.word2idx['<start>']
+            end = vocab.word2idx['<end>']
             for caps in all_captions:
                 caps = [c.long().tolist() for c in caps]
+                caps = [[w for w in c if w != start and w != end] for c in caps]
                 references.append(caps)
 
             preds = list()
             for s in scores:
                 _, pred = torch.max(s, dim=1)
-                preds.append(pred.tolist())
+                pred = pred.tolist()
+                pred = [w for w in pred if w != start and w != end]
+                preds.append(pred)
             hypotheses.extend(preds)
 
             assert len(references) == len(hypotheses)
@@ -440,11 +455,11 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
 
         feature = features[0].unsqueeze(0)
 
-        start_token = vocab.word2idx['<start>']
-        end_token = vocab.word2idx['<end>']
+        start = vocab.word2idx['<start>']
+        end = vocab.word2idx['<end>']
         sampled_ids = decoder.sample(feature,
-                                     start_token=start_token,
-                                     end_token=end_token,
+                                     start_token=start,
+                                     end_token=end,
                                      mode=tags[j])
         sampled_ids = sampled_ids[0].cpu().numpy()
 
@@ -464,7 +479,7 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
 
 
 def train_emotion(encoder, decoder, optimizer, criterion, data_loaders, tags,
-                  log_step):
+                  log_step, grad_clip):
     decoder.train()
     encoder.train()
 
@@ -494,6 +509,8 @@ def train_emotion(encoder, decoder, optimizer, criterion, data_loaders, tags,
             decoder.zero_grad()
             # encoder.zero_grad()
             loss.backward()
+            # Clip gradients
+            clip_gradient(optimizer, grad_clip)
             optimizer.step()
 
             if i % log_step == 0:
@@ -563,15 +580,16 @@ if __name__ == '__main__':
     parser.add_argument('--log_step', type=int, default=50)
     parser.add_argument('--log_step_emotion', type=int, default=5)
     parser.add_argument('--crop_size', type=int, default=224)
+    parser.add_argument('--grad_clip', type=float, default=0.5)
 
     # Model parameters
     parser.add_argument('--embed_size', type=int, default=300)
     parser.add_argument('--hidden_size', type=int, default=512)
     parser.add_argument('--factored_size', type=int, default=512)
     parser.add_argument('--attention_size', type=int, default=512)
-    parser.add_argument('--dropout', type=float, default=0.22)
+    parser.add_argument('--dropout', type=float, default=0.5)
 
-    parser.add_argument('--num_epochs', type=int, default=30)
+    parser.add_argument('--num_epochs', type=int, default=120)
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--caption_batch_size', type=int, default=64)
     parser.add_argument('--language_batch_size', type=int, default=96)

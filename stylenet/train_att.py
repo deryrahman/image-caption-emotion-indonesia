@@ -21,6 +21,7 @@ random.seed(0)
 
 
 def main(args):
+    log_path = args.log_path
     model_path = args.model_path
     crop_size = args.crop_size
     vocab_path = args.vocab_path
@@ -168,13 +169,14 @@ def main(args):
         batch_time, loss = res
         val_batch_time, top5, loss_val, bleu4 = val_res
         batch_time += val_batch_time
-        print(
-            """Epoch [{}/{}], [FAC], Batch Time: {:.3f}, Top-5 Acc: {:.3f}, BLEU-4 Score: {}"""
-            .format(epoch, num_epochs, batch_time, top5, bleu4))
-        print("""\tTrain Loss: {:.4f} | Train Perplexity: {:5.4f}""".format(
-            loss, np.exp(loss)))
-        print("""\tVal   Loss: {:.4f} | Val   Perplexity: {:5.4f}""".format(
-            loss_val, np.exp(loss_val)))
+        text = """Epoch [{}/{}], [FAC], Batch Time: {:.3f}, Top-5 Acc: {:.3f}, BLEU-4 Score: {}\n""".format(
+            epoch, num_epochs, batch_time, top5, bleu4)
+        text += """\tTrain Loss: {:.4f} | Train Perplexity: {:5.4f}\n""".format(
+            loss, np.exp(loss))
+        text += """\tVal   Loss: {:.4f} | Val   Perplexity: {:5.4f}\n""".format(
+            loss_val, np.exp(loss_val))
+        print(text)
+        open(log_path, 'a+').write(text)
 
         # train style
         res = train_emotion(encoder=encoder,
@@ -193,16 +195,16 @@ def main(args):
                               tags=tags)
         val_batch_time, top5accs, losses_val, bleu4s = val_res
         batch_time += val_batch_time
-        print("""Batch Time: {:.3f}""".format(batch_time))
+        text = """Batch Time: {:.3f}\n""".format(batch_time)
         for i in range(len(tags)):
-            print(
-                """Epoch [{}/{}], [{}], Batch Time: {:.3f}, Top-5 Acc: {:.3f}, , BLEU-4 Score: {}"""
-                .format(epoch, num_epochs, tags[i][:3].upper(), batch_time,
-                        top5accs[i], bleu4s[i]))
-            print("""\tTrain Loss: {:.4f} | Train Perplexity: {:5.4f}""".format(
-                losses[i], np.exp(losses[i])))
-            print("""\tVal   Loss: {:.4f} | Val   Perplexity: {:5.4f}""".format(
-                losses_val[i], np.exp(losses_val[i])))
+            text += """Epoch [{}/{}], [{}], Top-5 Acc: {:.3f}, , BLEU-4 Score: {}\n""".format(
+                epoch, num_epochs, tags[i][:3].upper(), top5accs[i], bleu4s[i])
+            text += """\tTrain Loss: {:.4f} | Train Perplexity: {:5.4f}\n""".format(
+                losses[i], np.exp(losses[i]))
+            text += """\tVal   Loss: {:.4f} | Val   Perplexity: {:5.4f}\n""".format(
+                losses_val[i], np.exp(losses_val[i]))
+        print(text)
+        open(log_path, 'a+').write(text)
 
         # Save the model checkpoints
         torch.save(
@@ -475,6 +477,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     # Path related
+    parser.add_argument('--log_path',
+                        type=str,
+                        default='out.log',
+                        help='path for logging')
     parser.add_argument('--model_path',
                         type=str,
                         default='models/',

@@ -294,8 +294,9 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
         batch_time.update(time.time() - start)
 
         # unpacked outputs
-        outputs = PackedSequence(outputs, packed_targets.batch_sizes)
-        scores = pad_packed_sequence(outputs, batch_first=True)
+        scores = outputs.clone()
+        scores = PackedSequence(scores, packed_targets.batch_sizes)
+        scores = pad_packed_sequence(scores, batch_first=True)
 
         start = vocab.word2idx['<start>']
         end = vocab.word2idx['<end>']
@@ -423,8 +424,9 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
             batch_time.update(time.time() - start)
 
             # unpacked outputs
-            outputs = PackedSequence(outputs, packed_targets.batch_sizes)
-            scores = pad_packed_sequence(outputs, batch_first=True)
+            scores = outputs.clone()
+            scores = PackedSequence(scores, packed_targets.batch_sizes)
+            scores = pad_packed_sequence(scores, batch_first=True)
 
             start = vocab.word2idx['<start>']
             end = vocab.word2idx['<end>']

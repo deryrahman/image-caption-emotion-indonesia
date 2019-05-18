@@ -83,7 +83,6 @@ def main(args):
         checkpoint = torch.load(checkpoint_path)
         start_epoch = 0
         epochs_since_improvement = checkpoint['epochs_since_improvement']
-        curr_bleu4 = checkpoint['bleu-4']
         best_bleu4 = checkpoint['bleu-4']
         decoder = checkpoint['decoder']
         encoder = checkpoint['encoder']
@@ -94,7 +93,6 @@ def main(args):
         checkpoint = torch.load(checkpoint_path)
         start_epoch = checkpoint['epoch'] + 1
         epochs_since_improvement = checkpoint['epochs_since_improvement']
-        curr_bleu4 = checkpoint['bleu-4']
         best_bleu4 = checkpoint['bleu-4']
         decoder = checkpoint['decoder']
         encoder = checkpoint['encoder']
@@ -147,12 +145,11 @@ def main(args):
                 mode[:3].upper(), epochs_since_improvement['emotion']))
         else:
             epochs_since_improvement['emotion'] = 0
-        curr_bleu4['emotion'] = bleu4
 
         # Save the model checkpoints
         save_checkpoint('models', model_path, mode[:3].upper(), epoch,
                         epochs_since_improvement, encoder, decoder, optimizer,
-                        lang_optimizer, curr_bleu4, is_best)
+                        lang_optimizer, best_bleu4, is_best)
 
 
 def val_emotion(encoder, decoder, vocab, criterion, data_loader):

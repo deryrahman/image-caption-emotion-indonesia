@@ -84,7 +84,6 @@ def main(args):
         start_epoch = 0
         epochs_since_improvement = {'factual': 0, 'emotion': 0}
         best_bleu4 = {'factual': 0., 'emotion': 0.}
-        curr_bleu4 = {'factual': 0., 'emotion': 0.}
 
         # Build the models
         encoder = EncoderCNN().to(device)
@@ -103,7 +102,6 @@ def main(args):
         checkpoint = torch.load(checkpoint_path)
         start_epoch = checkpoint['epoch'] + 1
         epochs_since_improvement = checkpoint['epochs_since_improvement']
-        curr_bleu4 = checkpoint['bleu-4']
         best_bleu4 = checkpoint['bleu-4']
         decoder = checkpoint['decoder']
         encoder = checkpoint['encoder']
@@ -154,12 +152,11 @@ def main(args):
                   epochs_since_improvement['factual'])
         else:
             epochs_since_improvement['factual'] = 0
-        curr_bleu4['factual'] = bleu4
 
         # Save the model checkpoints
         save_checkpoint('models', model_path, 'FAC', epoch,
                         epochs_since_improvement, encoder, decoder, optimizer,
-                        None, curr_bleu4, is_best)
+                        None, best_bleu4, is_best)
 
 
 def val_factual(encoder, decoder, vocab, criterion, data_loader):

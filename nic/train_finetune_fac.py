@@ -179,8 +179,12 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
                                               lengths=lengths,
                                               batch_first=True)
         targets = packed_targets.data
-        features = encoder(images)
-        outputs = decoder(captions, lengths, features, teacher_forcing_ratio=0)
+        with torch.no_grad():
+            features = encoder(images)
+            outputs = decoder(captions,
+                              lengths,
+                              features,
+                              teacher_forcing_ratio=0)
         loss = criterion(outputs, targets)
 
         # Keep track of metrics

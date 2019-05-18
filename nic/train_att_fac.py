@@ -183,11 +183,12 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
                                               batch_first=True)
         targets = packed_targets.data
         # Forward, backward and optimize
-        features = encoder(images)
-        outputs, alphas = decoder(captions[:, :-1],
-                                  lengths,
-                                  features,
-                                  teacher_forcing_ratio=0)
+        with torch.no_grad():
+            features = encoder(images)
+            outputs, alphas = decoder(captions[:, :-1],
+                                      lengths,
+                                      features,
+                                      teacher_forcing_ratio=0)
 
         loss = criterion(outputs, targets)
         alpha_c = 1.

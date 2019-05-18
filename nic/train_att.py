@@ -32,6 +32,8 @@ def main(args):
     vocab_path = args.vocab_path
     num_workers = args.num_workers
     grad_clip = args.grad_clip
+    checkpoint_path = args.checkpoint_path
+    is_fac = args.is_fac > 0
 
     mode = args.mode
     image_dir = args.image_dir
@@ -296,6 +298,11 @@ if __name__ == '__main__':
                         type=str,
                         default='data/flickr8k_id/vocab.pkl',
                         help='path for vocabulary wrapper')
+    parser.add_argument(
+        '--checkpoint_path',
+        type=str,
+        default='./models/FAC_BEST_checkpoint_nic_att_30k_4.pth.tar')
+    parser.add_argument('--is_fac', type=int, default=1)
     parser.add_argument('--image_dir',
                         type=str,
                         default='/home/m13515097/final_project/'

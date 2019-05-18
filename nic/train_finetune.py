@@ -21,9 +21,6 @@ random.seed(0)
 # resolve pytorch share multiprocess
 torch.multiprocessing.set_sharing_strategy('file_system')
 
-checkpoint_path = './models/FAC_BEST_checkpoint_nic_att_30k_4.pth.tar'
-is_fac = True
-
 
 def main(args):
     log_path = args.log_path
@@ -280,6 +277,11 @@ if __name__ == '__main__':
                         type=str,
                         default='models/',
                         help='path for saving trained models')
+    parser.add_argument(
+        '--checkpoint_path',
+        type=str,
+        default='./models/FAC_BEST_checkpoint_nic_finetune_30k_4.pth.tar')
+    parser.add_argument('--is_fac', type=int, default=1)
     parser.add_argument('--mode', type=str, default='happy')
     parser.add_argument('--vocab_path',
                         type=str,

@@ -213,9 +213,14 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
         hypotheses.extend(preds)
 
         assert len(references) == len(hypotheses)
-    # free
-    del loss
-    del outputs
+        # free
+        del images
+        del captions
+        del lengths
+        del all_captions
+        del packed_targets
+        del outputs
+
     torch.cuda.empty_cache()
 
     # Calculate BLEU-4 scores
@@ -276,9 +281,12 @@ def train_factual(encoder, decoder, optimizer, criterion, data_loader, log_step,
         # Keep track of metrics
         losses.update(loss.item(), sum(lengths))
         batch_time.update(time.time() - start)
-    # free
-    del loss
-    del outputs
+        # free
+        del images
+        del captions
+        del lengths
+        del outputs
+
     torch.cuda.empty_cache()
 
     return batch_time.val, losses.avg

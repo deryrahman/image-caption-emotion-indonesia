@@ -332,9 +332,15 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
 
         assert len(references) == len(hypotheses)
 
-    # free
-    del loss
-    del outputs
+        # free
+        del images
+        del captions
+        del lengths
+        del all_captions
+        del packed_targets
+        del outputs
+        del alphas
+
     torch.cuda.empty_cache()
 
     # Calculate BLEU-4 scores
@@ -398,9 +404,13 @@ def train_factual(encoder, decoder, optimizer, criterion, data_loader, log_step,
         # Keep track of metrics
         losses.update(loss.item(), sum(lengths))
         batch_time.update(time.time() - start)
-    # free
-    del loss
-    del outputs
+        # free
+        del images
+        del captions
+        del lengths
+        del outputs
+        del alphas
+
     torch.cuda.empty_cache()
 
     return batch_time.val, losses.avg
@@ -472,9 +482,15 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
 
             assert len(references) == len(hypotheses)
 
-        # free
-        del loss
-        del outputs
+            # free
+            del images
+            del captions
+            del lengths
+            del all_captions
+            del packed_targets
+            del outputs
+            del alphas
+
         torch.cuda.empty_cache()
 
         # Calculate BLEU-4 scores
@@ -547,9 +563,14 @@ def train_emotion(encoder, decoder, optimizer, criterion, data_loaders, tags,
             # Keep track of metrics
             losses[j].update(loss.item(), sum(lengths))
             batch_time.update(time.time() - start)
-        # free
-        del loss
-        del outputs
+
+            # free
+            del images
+            del captions
+            del lengths
+            del outputs
+            del alphas
+
         torch.cuda.empty_cache()
 
     return batch_time.val, [loss.avg for loss in losses]

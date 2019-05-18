@@ -22,6 +22,9 @@ random.seed(0)
 # resolve pytorch share multiprocess
 torch.multiprocessing.set_sharing_strategy('file_system')
 
+checkpoint_path = './models/FAC_BEST_checkpoint_nic_finetune_30k_4.pth.tar'
+is_fac = True
+
 
 def main(args):
     log_path = args.log_path
@@ -34,6 +37,7 @@ def main(args):
     mode = args.mode
     image_dir = args.image_dir
     val_emotion_path = args.emotion_path
+    is_fac = args.is_fac > 0
 
     emotion_path = args.emotion_path
     language_batch_size = args.language_batch_size
@@ -204,9 +208,14 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loader):
         hypotheses.extend(preds)
 
         assert len(references) == len(hypotheses)
-    # free
-    del loss
-    del outputs
+        # free
+        del images
+        del captions
+        del lengths
+        del all_captions
+        del packed_targets
+        del outputs
+
     torch.cuda.empty_cache()
 
     # Calculate BLEU-4 scores
@@ -267,9 +276,12 @@ def train_emotion(encoder, decoder, optimizer, criterion, data_loader, log_step,
         # Keep track of metrics
         losses.update(loss.item(), sum(lengths))
         batch_time.update(time.time() - start)
-    # free
-    del loss
-    del outputs
+        # free
+        del images
+        del captions
+        del lengths
+        del outputs
+
     torch.cuda.empty_cache()
 
     return batch_time.val, losses.avg

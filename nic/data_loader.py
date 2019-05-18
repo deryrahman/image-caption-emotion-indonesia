@@ -4,6 +4,7 @@ import os
 import nltk
 from PIL import Image
 from build_vocab import Vocabulary
+from copy import deepcopy
 import re
 
 
@@ -142,7 +143,8 @@ def collate_fn(data):
     for i, cap in enumerate(captions):
         end = lengths[i]
         targets[i, :end] = cap[:end]
-    return images, targets, lengths, all_captions
+    all_caps = deepcopy(all_captions)
+    return images, targets, lengths, all_caps
 
 
 def collate_fn_styled(captions):

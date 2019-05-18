@@ -266,7 +266,7 @@ def train_factual(encoder, decoder, optimizer, criterion, data_loader, log_step,
     losses = AverageMeter()
     start = time.time()
 
-    for i, (images, captions, lengths, _) in enumerate(data_loader):
+    for i, (images, captions, lengths, all_captions) in enumerate(data_loader):
         # Set mini-batch dataset
         images = images.to(device)
         captions = captions.to(device)
@@ -298,6 +298,8 @@ def train_factual(encoder, decoder, optimizer, criterion, data_loader, log_step,
         del images
         del captions
         del lengths
+        del all_captions
+        del targets
         del outputs
         del alphas
 

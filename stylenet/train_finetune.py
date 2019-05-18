@@ -364,7 +364,7 @@ def train_factual(encoder, decoder, optimizer, criterion, data_loader, log_step,
     losses = AverageMeter()
     start = time.time()
 
-    for i, (images, captions, lengths, _) in enumerate(data_loader):
+    for i, (images, captions, lengths, all_captions) in enumerate(data_loader):
         # Set mini-batch dataset
         images = images.to(device)
         captions = captions.to(device)
@@ -393,6 +393,8 @@ def train_factual(encoder, decoder, optimizer, criterion, data_loader, log_step,
         del images
         del captions
         del lengths
+        del all_captions
+        del targets
         del outputs
 
     torch.cuda.empty_cache()
@@ -510,7 +512,8 @@ def train_emotion(encoder, decoder, optimizer, criterion, data_loaders, tags,
     start = time.time()
 
     for j in random.sample([i for i in range(len(tags))], len(tags)):
-        for i, (images, captions, lengths, _) in enumerate(data_loaders[j]):
+        for i, (images, captions, lengths,
+                all_captions) in enumerate(data_loaders[j]):
             # Set mini-batch dataset
             images = images.to(device)
             captions = captions.to(device)
@@ -539,6 +542,8 @@ def train_emotion(encoder, decoder, optimizer, criterion, data_loaders, tags,
             del images
             del captions
             del lengths
+            del all_captions
+            del targets
             del outputs
 
         torch.cuda.empty_cache()

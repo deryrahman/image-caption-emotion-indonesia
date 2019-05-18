@@ -199,8 +199,7 @@ def main(args):
                               vocab=vocab,
                               criterion=criterion,
                               data_loader=val_data_loader)
-        # batch_time, loss = res
-        batch_time, loss = 0, 0
+        batch_time, loss = res
         val_batch_time, top5, loss_val, bleu4 = val_res
         batch_time += val_batch_time
         text = """Epoch [{}/{}], [FAC], Batch Time: {:.3f}, Top-5 Acc: {:.3f}, BLEU-4 Score: {}\n""".format(

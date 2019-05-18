@@ -19,8 +19,8 @@ from nltk.translate.bleu_score import corpus_bleu
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 random.seed(0)
 
-# resolve pytorch share multiprocess
-torch.multiprocessing.set_sharing_strategy('file_system')
+# # resolve pytorch share multiprocess
+# torch.multiprocessing.set_sharing_strategy('file_system')
 
 checkpoint_path = None
 

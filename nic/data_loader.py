@@ -142,8 +142,7 @@ def collate_fn(data):
     for i, cap in enumerate(captions):
         end = lengths[i]
         targets[i, :end] = cap[:end]
-    all_caps = all_captions.deepcopy()
-    return images, targets, lengths, all_caps
+    return images, targets, lengths, all_captions
 
 
 def collate_fn_styled(captions):

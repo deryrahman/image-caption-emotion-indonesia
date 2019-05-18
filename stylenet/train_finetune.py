@@ -269,9 +269,9 @@ def main(args):
             epochs_since_improvement['emotion'] = 0
 
         # Save the model checkpoints
-        save_checkpoint('models', 'stylenet_finetune', epoch,
-                        epochs_since_improvement, encoder, decoder, optimizer,
-                        lang_optimizer, bleu4, is_best)
+        save_checkpoint('models', model_path, epoch, epochs_since_improvement,
+                        encoder, decoder, optimizer, lang_optimizer, bleu4,
+                        is_best)
 
 
 def val_factual(encoder, decoder, vocab, criterion, data_loader):

@@ -396,6 +396,10 @@ def train_factual(encoder, decoder, optimizer, criterion, data_loader, log_step,
         # Keep track of metrics
         losses.update(loss.item(), sum(lengths))
         batch_time.update(time.time() - start)
+    # free
+    del loss
+    del outputs
+    torch.cuda.empty_cache()
 
     return batch_time.val, losses.avg
 
@@ -540,6 +544,10 @@ def train_emotion(encoder, decoder, optimizer, criterion, data_loaders, tags,
             # Keep track of metrics
             losses[j].update(loss.item(), sum(lengths))
             batch_time.update(time.time() - start)
+        # free
+        del loss
+        del outputs
+        torch.cuda.empty_cache()
 
     return batch_time.val, [loss.avg for loss in losses]
 

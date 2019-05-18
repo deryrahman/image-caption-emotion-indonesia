@@ -179,6 +179,7 @@ def main(args):
         encoder = checkpoint['encoder']
         optimizer = checkpoint['optimizer']
         lang_optimizer = checkpoint['lang_optimizer']
+        print('start_epoch', start_epoch)
 
     # Train the models
     for epoch in range(start_epoch, num_epochs):

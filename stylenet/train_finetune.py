@@ -132,14 +132,6 @@ def main(args):
                                        shuffle=False,
                                        num_workers=num_workers)
 
-    # Build the models
-    encoder = EncoderCNN(embed_size).to(device)
-    decoder = DecoderFactoredLSTM(embed_size,
-                                  hidden_size,
-                                  factored_size,
-                                  len(vocab),
-                                  1,
-                                  dropout=dropout).to(device)
     # Loss
     criterion = nn.CrossEntropyLoss()
 
@@ -157,7 +149,7 @@ def main(args):
         best_bleu4 = {'factual': 0., 'emotion': 0.}
 
         # Build the models
-        encoder = EncoderCNN().to(device)
+        encoder = EncoderCNN(embed_size).to(device)
         decoder = DecoderFactoredLSTM(embed_size,
                                       hidden_size,
                                       factored_size,
@@ -165,8 +157,7 @@ def main(args):
                                       1,
                                       dropout=dropout).to(device)
         # optimizer
-        params = list(decoder.parameters()) + list(
-            encoder.linear.parameters()) + list(encoder.bn.parameters())
+        params = list(decoder.parameters())
         lang_params = list(decoder.parameters())
         optimizer = torch.optim.Adam(params, lr=lr_caption)
         lang_optimizer = torch.optim.Adam(lang_params, lr=lr_language)

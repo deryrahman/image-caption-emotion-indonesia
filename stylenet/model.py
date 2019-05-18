@@ -203,7 +203,7 @@ class DecoderFactoredLSTM(nn.Module):
                factual_limit=-1,
                mode='factual'):
         """Generate captions for given image features using beam search."""
-        batch_size = features.size(0)
+        # batch_size = features.size(0)
 
         # (k, 1)
         k_prev_words = torch.LongTensor([[start_token]] * k).to(device)
@@ -216,8 +216,8 @@ class DecoderFactoredLSTM(nn.Module):
 
         # Start decoding
         step = 1
-        h_t = torch.zeros(batch_size, self.hidden_size).to(device)
-        c_t = torch.zeros(batch_size, self.hidden_size).to(device)
+        h_t = torch.zeros(k, self.hidden_size).to(device)
+        c_t = torch.zeros(k, self.hidden_size).to(device)
 
         while True:
             # (s, embed_dim)

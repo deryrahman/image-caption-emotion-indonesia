@@ -57,10 +57,6 @@ def main(args):
     log_step = args.log_step
     log_step_emotion = args.log_step_emotion
 
-    # Create model directory
-    if not os.path.exists(model_path):
-        os.makedirs(model_path)
-
     # Image preprocessing, normalization for the pretrained resnet
     transform = transforms.Compose([
         transforms.Resize((336, 336)),
@@ -147,6 +143,7 @@ def main(args):
         start_epoch = 0
         epochs_since_improvement = {'factual': 0, 'emotion': 0}
         best_bleu4 = {'factual': 0., 'emotion': 0.}
+        curr_bleu4 = {'factual': 0., 'emotion': 0.}
 
         # Build the models
         encoder = EncoderCNN(embed_size).to(device)
@@ -157,7 +154,8 @@ def main(args):
                                       1,
                                       dropout=dropout).to(device)
         # optimizer
-        params = list(decoder.parameters())
+        params = list(decoder.parameters()) + list(
+            encoder.linear.parameters()) + list(encoder.bn.parameters())
         lang_params = list(decoder.parameters())
         optimizer = torch.optim.Adam(params, lr=lr_caption)
         lang_optimizer = torch.optim.Adam(lang_params, lr=lr_language)
@@ -165,6 +163,7 @@ def main(args):
         checkpoint = torch.load(checkpoint_path)
         start_epoch = checkpoint['epoch'] + 1
         epochs_since_improvement = checkpoint['epochs_since_improvement']
+        curr_bleu4 = checkpoint['bleu-4']
         best_bleu4 = checkpoint['bleu-4']
         decoder = checkpoint['decoder']
         encoder = checkpoint['encoder']
@@ -220,6 +219,7 @@ def main(args):
                   epochs_since_improvement['factual'])
         else:
             epochs_since_improvement['factual'] = 0
+        curr_bleu4['factual'] = bleu4
 
         # train style
         res = train_emotion(encoder=encoder,
@@ -259,10 +259,11 @@ def main(args):
                   epochs_since_improvement['emotion'])
         else:
             epochs_since_improvement['emotion'] = 0
+        curr_bleu4['emotion'] = bleu4
 
         # Save the model checkpoints
         save_checkpoint('models', model_path, epoch, epochs_since_improvement,
-                        encoder, decoder, optimizer, lang_optimizer, bleu4,
+                        encoder, decoder, optimizer, lang_optimizer, curr_bleu4,
                         is_best)
 
 
@@ -324,7 +325,11 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
     bleu4 = corpus_bleu(references, hypotheses)
 
     feature = features[0].unsqueeze(0)
-    sampled_ids = decoder.sample(feature)
+    start_token = vocab.word2idx['<start>']
+    end_token = vocab.word2idx['<end>']
+    sampled_ids = decoder.sample(feature,
+                                 start_token=start_token,
+                                 end_token=end_token)
     sampled_ids = sampled_ids[0].cpu().numpy()
 
     # Convert word_ids to words
@@ -442,9 +447,14 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
         # Calculate BLEU-4 scores
         bleu4 = corpus_bleu(references, hypotheses)
         bleu4s.append(bleu4)
-        feature = features[0].unsqueeze(0)
 
-        sampled_ids = decoder.sample(feature, mode=tags[j])
+        feature = features[0].unsqueeze(0)
+        start_token = vocab.word2idx['<start>']
+        end_token = vocab.word2idx['<end>']
+        sampled_ids = decoder.sample(feature,
+                                     start_token=start_token,
+                                     end_token=end_token,
+                                     mode=tags[j])
         sampled_ids = sampled_ids[0].cpu().numpy()
 
         # Convert word_ids to words

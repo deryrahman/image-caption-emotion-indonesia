@@ -13,6 +13,8 @@ class FlickrDataset(data.Dataset):
     def __init__(self, img_dir, caption_file, vocab, transform=None):
         self.img_dir = img_dir
         self.imgname_caption_list = self._get_imgname_and_caption(caption_file)
+        self.imgname_caption_map = self._get_imgname_and_caption_map(
+            caption_file)
         self.vocab = vocab
         self.transform = transform
 
@@ -29,10 +31,27 @@ class FlickrDataset(data.Dataset):
 
         return imgname_caption_list
 
+    def _get_imgname_and_caption_map(self, caption_file):
+        with open(caption_file, 'r') as f:
+            res = f.readlines()
+
+        imgname_caption_map = {}
+        r = re.compile(r'#\d*')
+        for line in res:
+            img_and_cap = r.split(line)
+            img_and_cap = [x.strip() for x in img_and_cap]
+            filename = img_and_cap[0]
+            cap = img_and_cap[1]
+            if imgname_caption_map.get(filename) is None:
+                imgname_caption_map[filename] = []
+            imgname_caption_map[filename].append(cap)
+
+        return imgname_caption_map
+
     def __getitem__(self, index):
 
-        img_name = self.imgname_caption_list[index][0]
-        img_name = os.path.join(self.img_dir, img_name)
+        filename = self.imgname_caption_list[index][0]
+        img_name = os.path.join(self.img_dir, filename)
         caption = self.imgname_caption_list[index][1]
 
         image = FlickrDataset.__cache.get(img_name)
@@ -44,12 +63,22 @@ class FlickrDataset(data.Dataset):
 
         # Convert caption (string) to word ids.
         tokens = nltk.tokenize.word_tokenize(str(caption).lower())
+        target = self._convert_token(tokens)
+        all_target = []
+        for caption in self.imgname_caption_map[filename]:
+            tokens = nltk.tokenize.word_tokenize(str(caption).lower())
+            all_target.append(self._convert_token(tokens))
+
+        return image, target, all_target
+
+    def _convert_token(self, tokens):
         caption = []
         caption.append(self.vocab('<start>'))
         caption.extend([self.vocab(token) for token in tokens])
         caption.append(self.vocab('<end>'))
         target = torch.Tensor(caption)
-        return image, target
+
+        return target
 
     def __len__(self):
         return len(self.imgname_caption_list)
@@ -102,7 +131,7 @@ def collate_fn(data):
     """
     # Sort a data list by caption length (descending order).
     data.sort(key=lambda x: len(x[1]), reverse=True)
-    images, captions = zip(*data)
+    images, captions, all_captions = zip(*data)
 
     # Merge images (from tuple of 3D tensor to 4D tensor).
     images = torch.stack(images, 0)
@@ -113,7 +142,7 @@ def collate_fn(data):
     for i, cap in enumerate(captions):
         end = lengths[i]
         targets[i, :end] = cap[:end]
-    return images, targets, lengths
+    return images, targets, lengths, all_captions
 
 
 def collate_fn_styled(captions):

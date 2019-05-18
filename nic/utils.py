@@ -60,8 +60,8 @@ def clip_gradient(optimizer, grad_clip):
                 param.grad.data.clamp_(-grad_clip, grad_clip)
 
 
-def save_checkpoint(data_name, epoch, epochs_since_improvement, encoder,
-                    decoder, encoder_optimizer, decoder_optimizer, bleu4,
+def save_checkpoint(folder, data_name, mode, epoch, epochs_since_improvement,
+                    encoder, decoder, optimizer, lang_optimizer, bleu4,
                     is_best):
     """
     Saves model checkpoint.
@@ -70,8 +70,6 @@ def save_checkpoint(data_name, epoch, epochs_since_improvement, encoder,
     :param epochs_since_improvement: number of epochs since last improvement in BLEU-4 score
     :param encoder: encoder model
     :param decoder: decoder model
-    :param encoder_optimizer: optimizer to update encoder's weights, if fine-tuning
-    :param decoder_optimizer: optimizer to update decoder's weights
     :param bleu4: validation BLEU-4 score for this epoch
     :param is_best: is this checkpoint the best so far?
     """
@@ -81,14 +79,15 @@ def save_checkpoint(data_name, epoch, epochs_since_improvement, encoder,
         'bleu-4': bleu4,
         'encoder': encoder,
         'decoder': decoder,
-        'encoder_optimizer': encoder_optimizer,
-        'decoder_optimizer': decoder_optimizer
+        'optimizer': optimizer,
+        'lang_optimizer': lang_optimizer
     }
-    filename = 'checkpoint_' + data_name + '.pth.tar'
+    filename = folder + '/' + mode + '_checkpoint_' + data_name + '.pth.tar'
     torch.save(state, filename)
     # If this checkpoint is the best so far, store a copy so it doesn't get overwritten by a worse checkpoint
     if is_best:
-        torch.save(state, 'BEST_' + filename)
+        filename = folder + '/' + mode + '_BEST_checkpoint_' + data_name + '.pth.tar'
+        torch.save(state, filename)
 
 
 class AverageMeter(object):

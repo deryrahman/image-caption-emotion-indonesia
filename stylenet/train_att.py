@@ -330,6 +330,11 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
 
         assert len(references) == len(hypotheses)
 
+    # free
+    del loss
+    del outputs
+    torch.cuda.empty_cache()
+
     # Calculate BLEU-4 scores
     bleu4 = corpus_bleu(references, hypotheses)
 
@@ -459,6 +464,11 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
             hypotheses.extend(preds)
 
             assert len(references) == len(hypotheses)
+
+        # free
+        del loss
+        del outputs
+        torch.cuda.empty_cache()
 
         # Calculate BLEU-4 scores
         bleu4 = corpus_bleu(references, hypotheses)

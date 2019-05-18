@@ -12,6 +12,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, Packed
 from torchvision import transforms
 from utils import AverageMeter, accuracy, adjust_learning_rate, clip_gradient, save_checkpoint
 from nltk.translate.bleu_score import corpus_bleu
+from copy import deepcopy
 # from validate import validate
 
 # Device configuration
@@ -201,7 +202,8 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loader):
 
         start = vocab.word2idx['<start>']
         end = vocab.word2idx['<end>']
-        for caps in all_captions:
+        all_caps = deepcopy(all_captions)
+        for caps in all_caps:
             caps = [c.long().tolist() for c in caps]
             caps = [[w for w in c if w != start and w != end] for c in caps]
             references.append(caps)

@@ -11,7 +11,7 @@ from build_vocab import Vocabulary
 from model import EncoderCNN, DecoderFactoredLSTM
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, PackedSequence
 from torchvision import transforms
-from utils import AverageMeter, accuracy, adjust_learning_rate, clip_gradient
+from utils import AverageMeter, accuracy, adjust_learning_rate, clip_gradient, save_checkpoint
 from nltk.translate.bleu_score import corpus_bleu
 # from validate import validate
 
@@ -21,6 +21,8 @@ random.seed(0)
 
 # resolve pytorch share multiprocess
 torch.multiprocessing.set_sharing_strategy('file_system')
+
+checkpoint_path = None
 
 
 def main(args):
@@ -138,34 +140,57 @@ def main(args):
                                   len(vocab),
                                   1,
                                   dropout=dropout).to(device)
-
-    # Loss and optimizer
+    # Loss
     criterion = nn.CrossEntropyLoss()
-    params = list(decoder.parameters()) + list(
-        encoder.linear.parameters()) + list(encoder.bn.parameters())
-    lang_params = list(decoder.parameters())
-    optimizer = torch.optim.Adam(params, lr=lr_caption)
-    lang_optimizer = torch.optim.Adam(lang_params, lr=lr_language)
 
-    # Train the models
+    # data loader list
     data_loaders = [happy_data_loader, sad_data_loader, angry_data_loader]
     val_data_loaders = [
         val_happy_data_loader, val_sad_data_loader, val_angry_data_loader
     ]
+    # tag list
     tags = ['happy', 'sad', 'angry']
 
-    epochs_since_improvement = {'factual': 0, 'emotion': 0}
-    best_bleu4 = {'factual': 0., 'emotion': 0.}
-    for epoch in range(num_epochs):
+    if checkpoint_path is None:
+        start_epoch = 0
+        epochs_since_improvement = {'factual': 0, 'emotion': 0}
+        best_bleu4 = {'factual': 0., 'emotion': 0.}
 
-        # Decay learning rate if there is no improvement for 8 consecutive epochs, and terminate training after 20
+        # Build the models
+        encoder = EncoderCNN().to(device)
+        decoder = DecoderFactoredLSTM(embed_size,
+                                      hidden_size,
+                                      factored_size,
+                                      len(vocab),
+                                      1,
+                                      dropout=dropout).to(device)
+        # optimizer
+        params = list(decoder.parameters()) + list(
+            encoder.linear.parameters()) + list(encoder.bn.parameters())
+        lang_params = list(decoder.parameters())
+        optimizer = torch.optim.Adam(params, lr=lr_caption)
+        lang_optimizer = torch.optim.Adam(lang_params, lr=lr_language)
+    else:
+        checkpoint = torch.load(checkpoint_path)
+        start_epoch = checkpoint['epoch'] + 1
+        epochs_since_improvement = checkpoint['epochs_since_improvement']
+        best_bleu4 = checkpoint['bleu-4']
+        decoder = checkpoint['decoder']
+        encoder = checkpoint['encoder']
+        optimizer = checkpoint['optimizer']
+        lang_optimizer = checkpoint['lang_optimizer']
+
+    # Train the models
+    for epoch in range(start_epoch, num_epochs):
+
+        # Decay learning rate if there is no improvement for 4 consecutive epochs, and terminate training after 10
         imp_fac = epochs_since_improvement['factual']
         imp_emo = epochs_since_improvement['emotion']
-        if imp_fac >= 20 and imp_emo >= 20:
+        if imp_fac >= 10 and imp_emo >= 10:
             break
-        if imp_fac > 0 and imp_fac % 8 == 0:
+        if imp_fac > 0 and imp_fac % 4 == 0:
             adjust_learning_rate(optimizer, 0.8)
-        if imp_emo > 0 and imp_emo % 8 == 0:
+        if imp_emo > 0 and imp_emo % 4 == 0:
             adjust_learning_rate(lang_optimizer, 0.8)
 
         # train factual
@@ -244,12 +269,9 @@ def main(args):
             epochs_since_improvement['emotion'] = 0
 
         # Save the model checkpoints
-        torch.save(
-            decoder.state_dict(),
-            os.path.join(args.model_path, 'decoder-{}.ckpt'.format(epoch + 1)))
-        torch.save(
-            encoder.state_dict(),
-            os.path.join(args.model_path, 'encoder-{}.ckpt'.format(epoch + 1)))
+        save_checkpoint('models', 'stylenet_finetune', epoch,
+                        epochs_since_improvement, encoder, decoder, optimizer,
+                        lang_optimizer, bleu4, is_best)
 
 
 def val_factual(encoder, decoder, vocab, criterion, data_loader):

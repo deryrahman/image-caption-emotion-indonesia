@@ -22,8 +22,8 @@ random.seed(0)
 # resolve pytorch share multiprocess
 torch.multiprocessing.set_sharing_strategy('file_system')
 
-checkpoint_path = './models/FAC_BEST_checkpoint_nic_finetune_30k_4.pth.tar'
-is_fac = True
+# checkpoint_path = './models/FAC_BEST_checkpoint_nic_finetune_30k_4.pth.tar'
+# is_fac = True
 
 
 def main(args):

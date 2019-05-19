@@ -89,6 +89,7 @@ def main(args):
         optimizer = checkpoint['optimizer']
         lang_params = list(decoder.parameters())
         lang_optimizer = torch.optim.Adam(lang_params, lr=lr_language)
+        print('load fac', checkpoint_path)
     else:
         checkpoint = torch.load(checkpoint_path)
         start_epoch = checkpoint['epoch'] + 1

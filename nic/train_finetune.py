@@ -37,6 +37,7 @@ def main(args):
     mode = args.mode
     image_dir = args.image_dir
     val_emotion_path = args.emotion_path
+    checkpoint_path = args.checkpoint_path
     is_fac = args.is_fac > 0
 
     emotion_path = args.emotion_path
@@ -88,6 +89,7 @@ def main(args):
         optimizer = checkpoint['optimizer']
         lang_params = list(decoder.parameters())
         lang_optimizer = torch.optim.Adam(lang_params, lr=lr_language)
+        print('load fac', checkpoint_path)
     else:
         checkpoint = torch.load(checkpoint_path)
         start_epoch = checkpoint['epoch'] + 1

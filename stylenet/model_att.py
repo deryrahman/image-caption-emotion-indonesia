@@ -263,8 +263,9 @@ class DecoderFactoredLSTMAtt(nn.Module):
         hiddens = []
         predicted = captions[:, 0:1]
 
-        attention = self.attention
-        if mode == 'happy':
+        if mode == 'factual':
+            attention = self.attention
+        elif mode == 'happy':
             attention = self.attention_happy
         elif mode == 'sad':
             attention = self.attention_sad

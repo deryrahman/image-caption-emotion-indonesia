@@ -46,6 +46,7 @@ def main(args):
     sad_path = args.sad_path
     angry_path = args.angry_path
     language_batch_size = args.language_batch_size
+    emo_id = args.emo_id
 
     embed_size = args.embed_size
     hidden_size = args.hidden_size
@@ -139,6 +140,10 @@ def main(args):
     ]
     # tag list
     tags = ['happy', 'sad', 'angry']
+
+    data_loaders = [data_loaders[emo_id]]
+    val_data_loaders = [val_data_loaders[emo_id]]
+    tags = [tags[emo_id]]
 
     if checkpoint_path is None:
         start_epoch = 0
@@ -609,6 +614,7 @@ if __name__ == '__main__':
     parser.add_argument('--log_step_emotion', type=int, default=5)
     parser.add_argument('--crop_size', type=int, default=224)
     parser.add_argument('--grad_clip', type=float, default=0.5)
+    parser.add_argument('--emo_id', type=str, default=0)
 
     # Model parameters
     parser.add_argument('--embed_size', type=int, default=300)

@@ -137,18 +137,24 @@ class DecoderFactoredLSTMAtt(nn.Module):
         self.W_c = nn.Linear(hidden_size, hidden_size, bias=bias)
 
         # happy
+        self.attention_happy = Attention(feature_size, hidden_size,
+                                         attention_size)
         self.S_happy_i = nn.Linear(factored_size, factored_size, bias=bias)
         self.S_happy_f = nn.Linear(factored_size, factored_size, bias=bias)
         self.S_happy_o = nn.Linear(factored_size, factored_size, bias=bias)
         self.S_happy_c = nn.Linear(factored_size, factored_size, bias=bias)
 
         # sad
+        self.attention_sad = Attention(feature_size, hidden_size,
+                                       attention_size)
         self.S_sad_i = nn.Linear(factored_size, factored_size, bias=bias)
         self.S_sad_f = nn.Linear(factored_size, factored_size, bias=bias)
         self.S_sad_o = nn.Linear(factored_size, factored_size, bias=bias)
         self.S_sad_c = nn.Linear(factored_size, factored_size, bias=bias)
 
         # angry
+        self.attention_angry = Attention(feature_size, hidden_size,
+                                         attention_size)
         self.S_angry_i = nn.Linear(factored_size, factored_size, bias=bias)
         self.S_angry_f = nn.Linear(factored_size, factored_size, bias=bias)
         self.S_angry_o = nn.Linear(factored_size, factored_size, bias=bias)
@@ -256,9 +262,20 @@ class DecoderFactoredLSTMAtt(nn.Module):
 
         hiddens = []
         predicted = captions[:, 0:1]
+
+        attention = self.attention
+        if mode == 'happy':
+            attention = self.attention_happy
+        elif mode == 'sad':
+            attention = self.attention_sad
+        elif mode == 'angry':
+            attention = self.attention_angry
+        else:
+            sys.stderr.write("mode name wrong!")
+
         for i, b_sz in enumerate(packed.batch_sizes):
 
-            attention_weighted_encoding, alpha = self.attention(
+            attention_weighted_encoding, alpha = attention(
                 features[:b_sz], h_t[:b_sz])
 
             # gating scalar, (batch_size_t, encoder_dim)
@@ -316,11 +333,21 @@ class DecoderFactoredLSTMAtt(nn.Module):
         step = 1
         h_t, c_t = self.init_hidden_state(features)
 
+        attention = self.attention
+        if mode == 'happy':
+            attention = self.attention_happy
+        elif mode == 'sad':
+            attention = self.attention_sad
+        elif mode == 'angry':
+            attention = self.attention_angry
+        else:
+            sys.stderr.write("mode name wrong!")
+
         while True:
             # (s, embed_dim)
             embeddings = self.B(k_prev_words).squeeze(1)
             # (s, encoder_dim), (s, num_pixels)
-            awe, _ = self.attention(features, h_t)
+            awe, _ = attention(features, h_t)
 
             # gating scalar, (s, encoder_dim)
             gate = self.sigmoid(self.f_beta(h_t))

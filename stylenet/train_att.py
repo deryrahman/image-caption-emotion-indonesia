@@ -46,6 +46,7 @@ def main(args):
     sad_path = args.sad_path
     angry_path = args.angry_path
     language_batch_size = args.language_batch_size
+    emo_id = args.emo_id
 
     embed_size = args.embed_size
     hidden_size = args.hidden_size
@@ -141,6 +142,10 @@ def main(args):
     # tag list
     tags = ['happy', 'sad', 'angry']
 
+    data_loaders = [data_loaders[emo_id]]
+    val_data_loaders = [val_data_loaders[emo_id]]
+    tags = [tags[emo_id]]
+
     if checkpoint_path is None:
         start_epoch = 0
         epochs_since_improvement = {'factual': 0, 'emotion': 0}
@@ -159,8 +164,30 @@ def main(args):
         params = list(decoder.parameters()) + list(
             encoder.adaptive_pool.parameters())
         lang_params = list(decoder.parameters())
+        # happy_S_params = list(decoder.S_happy_c) + list(
+        #     decoder.S_happy_f) + list(decoder.S_happy_i) + list(
+        #         decoder.S_happy_o)
+        # happy_params = list(
+        #     decoder.attention_happy.parameters()) + happy_S_params + list(
+        #         decoder.B.parameters())
+        # sad_S_params = list(decoder.S_sad_c) + list(decoder.S_sad_f) + list(
+        #     decoder.S_sad_i) + list(decoder.S_sad_o)
+        # sad_params = list(
+        #     decoder.attention_sad.parameters()) + sad_S_params + list(
+        #         decoder.B.parameters())
+        # angry_S_params = list(decoder.S_angry_c) + list(
+        #     decoder.S_angry_f) + list(decoder.S_angry_i) + list(
+        #         decoder.S_angry_o)
+        # angry_params = list(
+        #     decoder.attention_angry.parameters()) + angry_S_params + list(
+        #         decoder.B.parameters())
         optimizer = torch.optim.Adam(params, lr=lr_caption)
         lang_optimizer = torch.optim.Adam(lang_params, lr=lr_language)
+        # lang_optimizers = [
+        #     torch.optim.Adam(happy_params, lr=lr_language),
+        #     torch.optim.Adam(sad_params, lr=lr_language),
+        #     torch.optim.Adam(angry_params, lr=lr_language)
+        # ]
     else:
         checkpoint = torch.load(checkpoint_path)
         start_epoch = checkpoint['epoch'] + 1
@@ -170,6 +197,7 @@ def main(args):
         encoder = checkpoint['encoder']
         optimizer = checkpoint['optimizer']
         lang_optimizer = checkpoint['lang_optimizer']
+        # lang_optimizers = checkpoint['lang_optimizer']
         print('start_epoch', start_epoch)
 
     # Train the models
@@ -183,7 +211,10 @@ def main(args):
         if imp_fac > 0 and imp_fac % 4 == 0:
             adjust_learning_rate(optimizer, 0.8)
         if imp_emo > 0 and imp_emo % 4 == 0:
-            adjust_learning_rate(lang_optimizer, 0.8)
+            adjust_learning_rate(
+                lang_optimizer,
+                #lang_optimizers,
+                0.8)
 
         # train factual
         res = train_factual(encoder=encoder,
@@ -221,14 +252,16 @@ def main(args):
             epochs_since_improvement['factual'] = 0
 
         # train style
-        res = train_emotion(encoder=encoder,
-                            decoder=decoder,
-                            optimizer=lang_optimizer,
-                            criterion=criterion,
-                            data_loaders=data_loaders,
-                            tags=tags,
-                            log_step=log_step_emotion,
-                            grad_clip=grad_clip)
+        res = train_emotion(
+            encoder=encoder,
+            decoder=decoder,
+            optimizer=lang_optimizer,
+            # optimizer=lang_optimizers,
+            criterion=criterion,
+            data_loaders=data_loaders,
+            tags=tags,
+            log_step=log_step_emotion,
+            grad_clip=grad_clip)
         batch_time, losses = res
         val_res = val_emotion(encoder=encoder,
                               decoder=decoder,
@@ -260,9 +293,18 @@ def main(args):
             epochs_since_improvement['emotion'] = 0
 
         # Save the model checkpoints
-        save_checkpoint('models', model_path, epoch, epochs_since_improvement,
-                        encoder, decoder, optimizer, lang_optimizer, best_bleu4,
-                        is_best)
+        save_checkpoint(
+            'models',
+            model_path,
+            epoch,
+            epochs_since_improvement,
+            encoder,
+            decoder,
+            optimizer,
+            lang_optimizer,
+            #lang_optimizers,
+            best_bleu4,
+            is_best)
 
 
 def val_factual(encoder, decoder, vocab, criterion, data_loader):
@@ -557,6 +599,7 @@ def train_emotion(encoder, decoder, optimizer, criterion, data_loaders, tags,
             # Clip gradients
             clip_gradient(optimizer, grad_clip)
             optimizer.step()
+            # optimizer[j].step()
 
             if i % log_step == 0:
                 print("""Step [{}/{}], [{}], Loss: {:.4f}""".format(
@@ -637,6 +680,7 @@ if __name__ == '__main__':
     parser.add_argument('--log_step_emotion', type=int, default=5)
     parser.add_argument('--crop_size', type=int, default=224)
     parser.add_argument('--grad_clip', type=float, default=0.5)
+    parser.add_argument('--emo_id', type=str, default=0)
 
     # Model parameters
     parser.add_argument('--embed_size', type=int, default=300)

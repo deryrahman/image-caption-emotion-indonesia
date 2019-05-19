@@ -467,8 +467,7 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
                 outputs, alphas = decoder(captions[:, :-1],
                                           lengths,
                                           features,
-                                          teacher_forcing_ratio=0,
-                                          mode=tags[j])
+                                          teacher_forcing_ratio=0)
             loss = criterion(outputs, targets)
             alpha_c = 1.
             loss += alpha_c * ((1. - alphas.sum(dim=1))**2).mean()
@@ -521,10 +520,7 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
 
         start = vocab.word2idx['<start>']
         end = vocab.word2idx['<end>']
-        sampled_ids = decoder.sample(feature,
-                                     start_token=start,
-                                     end_token=end,
-                                     mode=tags[j])
+        sampled_ids = decoder.sample(feature, start_token=start, end_token=end)
         sampled_ids = sampled_ids[0].cpu().numpy()
 
         # Convert word_ids to words
@@ -563,10 +559,7 @@ def train_emotion(encoder, decoder, optimizer, criterion, data_loaders, tags,
                                            batch_first=True)[0]
             # Forward, backward and optimize
             features = encoder(images)
-            outputs, alphas = decoder(captions[:, :-1],
-                                      lengths,
-                                      features,
-                                      mode=tags[j])
+            outputs, alphas = decoder(captions[:, :-1], lengths, features)
             loss = criterion(outputs, targets)
             alpha_c = 1.
             loss += alpha_c * ((1. - alphas.sum(dim=1))**2).mean()

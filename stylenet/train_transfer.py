@@ -7,7 +7,7 @@ import random
 import time
 from data_loader import get_loader
 from build_vocab import Vocabulary
-from model import EncoderCNN, DecoderFactoredLSTMAtt
+from model import EncoderCNN, DecoderFactoredLSTM
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, PackedSequence
 from torchvision import transforms
 from utils import AverageMeter, accuracy, adjust_learning_rate, clip_gradient, save_checkpoint

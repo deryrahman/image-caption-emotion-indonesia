@@ -8,7 +8,7 @@ import random
 import time
 from data_loader import get_loader
 from build_vocab import Vocabulary
-from model_att import EncoderCNN, DecoderFactoredLSTMAtt
+from model import EncoderCNN, DecoderFactoredLSTM
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, PackedSequence
 from torchvision import transforms
 from utils import AverageMeter, accuracy, adjust_learning_rate, clip_gradient, save_checkpoint
@@ -46,12 +46,11 @@ def main(args):
     sad_path = args.sad_path
     angry_path = args.angry_path
     language_batch_size = args.language_batch_size
-    emo_id = args.emo_id
+    mode = args.mode
 
     embed_size = args.embed_size
     hidden_size = args.hidden_size
     factored_size = args.factored_size
-    attention_size = args.attention_size
     dropout = args.dropout
 
     lr_caption = args.lr_caption
@@ -142,6 +141,7 @@ def main(args):
     # tag list
     tags = ['happy', 'sad', 'angry']
 
+    emo_id = tags.index(mode)
     data_loaders = [data_loaders[emo_id]]
     val_data_loaders = [val_data_loaders[emo_id]]
     tags = [tags[emo_id]]
@@ -152,42 +152,19 @@ def main(args):
         best_bleu4 = {'factual': 0., 'emotion': 0.}
 
         # Build the models
-        encoder = EncoderCNN().to(device)
-        decoder = DecoderFactoredLSTMAtt(attention_size,
-                                         embed_size,
-                                         hidden_size,
-                                         factored_size,
-                                         len(vocab),
-                                         1,
-                                         dropout=dropout).to(device)
+        encoder = EncoderCNN(embed_size).to(device)
+        decoder = DecoderFactoredLSTM(embed_size,
+                                      hidden_size,
+                                      factored_size,
+                                      len(vocab),
+                                      1,
+                                      dropout=dropout).to(device)
         # optimizer
         params = list(decoder.parameters()) + list(
-            encoder.adaptive_pool.parameters())
+            encoder.linear.parameters()) + list(encoder.bn.parameters())
         lang_params = list(decoder.parameters())
-        # happy_S_params = list(decoder.S_happy_c) + list(
-        #     decoder.S_happy_f) + list(decoder.S_happy_i) + list(
-        #         decoder.S_happy_o)
-        # happy_params = list(
-        #     decoder.attention_happy.parameters()) + happy_S_params + list(
-        #         decoder.B.parameters())
-        # sad_S_params = list(decoder.S_sad_c) + list(decoder.S_sad_f) + list(
-        #     decoder.S_sad_i) + list(decoder.S_sad_o)
-        # sad_params = list(
-        #     decoder.attention_sad.parameters()) + sad_S_params + list(
-        #         decoder.B.parameters())
-        # angry_S_params = list(decoder.S_angry_c) + list(
-        #     decoder.S_angry_f) + list(decoder.S_angry_i) + list(
-        #         decoder.S_angry_o)
-        # angry_params = list(
-        #     decoder.attention_angry.parameters()) + angry_S_params + list(
-        #         decoder.B.parameters())
         optimizer = torch.optim.Adam(params, lr=lr_caption)
         lang_optimizer = torch.optim.Adam(lang_params, lr=lr_language)
-        # lang_optimizers = [
-        #     torch.optim.Adam(happy_params, lr=lr_language),
-        #     torch.optim.Adam(sad_params, lr=lr_language),
-        #     torch.optim.Adam(angry_params, lr=lr_language)
-        # ]
     else:
         checkpoint = torch.load(checkpoint_path)
         start_epoch = checkpoint['epoch'] + 1
@@ -197,7 +174,6 @@ def main(args):
         encoder = checkpoint['encoder']
         optimizer = checkpoint['optimizer']
         lang_optimizer = checkpoint['lang_optimizer']
-        # lang_optimizers = checkpoint['lang_optimizer']
         print('start_epoch', start_epoch)
 
     # Train the models
@@ -211,10 +187,7 @@ def main(args):
         if imp_fac > 0 and imp_fac % 4 == 0:
             adjust_learning_rate(optimizer, 0.8)
         if imp_emo > 0 and imp_emo % 4 == 0:
-            adjust_learning_rate(
-                lang_optimizer,
-                #lang_optimizers,
-                0.8)
+            adjust_learning_rate(lang_optimizer, 0.8)
 
         # train factual
         res = train_factual(encoder=encoder,
@@ -252,16 +225,14 @@ def main(args):
             epochs_since_improvement['factual'] = 0
 
         # train style
-        res = train_emotion(
-            encoder=encoder,
-            decoder=decoder,
-            optimizer=lang_optimizer,
-            # optimizer=lang_optimizers,
-            criterion=criterion,
-            data_loaders=data_loaders,
-            tags=tags,
-            log_step=log_step_emotion,
-            grad_clip=grad_clip)
+        res = train_emotion(encoder=encoder,
+                            decoder=decoder,
+                            optimizer=lang_optimizer,
+                            criterion=criterion,
+                            data_loaders=data_loaders,
+                            tags=tags,
+                            log_step=log_step_emotion,
+                            grad_clip=grad_clip)
         batch_time, losses = res
         val_res = val_emotion(encoder=encoder,
                               decoder=decoder,
@@ -293,18 +264,9 @@ def main(args):
             epochs_since_improvement['emotion'] = 0
 
         # Save the model checkpoints
-        save_checkpoint(
-            'models',
-            model_path,
-            epoch,
-            epochs_since_improvement,
-            encoder,
-            decoder,
-            optimizer,
-            lang_optimizer,
-            #lang_optimizers,
-            best_bleu4,
-            is_best)
+        save_checkpoint('models', model_path, mode[:3].upper(), epoch,
+                        epochs_since_improvement, encoder, decoder, optimizer,
+                        lang_optimizer, best_bleu4, is_best)
 
 
 def val_factual(encoder, decoder, vocab, criterion, data_loader):
@@ -325,22 +287,17 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
         # Set mini-batch dataset
         images = images.to(device)
         captions = captions.to(device)
-        lengths = [l - 1 for l in lengths]
-        packed_targets = pack_padded_sequence(input=captions[:, 1:],
+        packed_targets = pack_padded_sequence(input=captions,
                                               lengths=lengths,
                                               batch_first=True)
         targets = packed_targets.data
-        # Forward, backward and optimize
         with torch.no_grad():
             features = encoder(images)
-            outputs, alphas = decoder(captions[:, :-1],
-                                      lengths,
-                                      features,
-                                      teacher_forcing_ratio=0)
-
+            outputs = decoder(captions,
+                              lengths,
+                              features,
+                              teacher_forcing_ratio=0)
         loss = criterion(outputs, targets)
-        alpha_c = 1.
-        loss += alpha_c * ((1. - alphas.sum(dim=1))**2).mean()
 
         # Keep track of metrics
         losses.update(loss.item(), sum(lengths))
@@ -370,7 +327,6 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
         hypotheses.extend(preds)
 
         assert len(references) == len(hypotheses)
-
         # free
         del images
         del captions
@@ -378,7 +334,6 @@ def val_factual(encoder, decoder, vocab, criterion, data_loader):
         del all_captions
         del packed_targets
         del outputs
-        del alphas
 
     torch.cuda.empty_cache()
 
@@ -419,16 +374,13 @@ def train_factual(encoder, decoder, optimizer, criterion, data_loader, log_step,
         # Set mini-batch dataset
         images = images.to(device)
         captions = captions.to(device)
-        lengths = [l - 1 for l in lengths]
-        targets = pack_padded_sequence(input=captions[:, 1:],
+        targets = pack_padded_sequence(input=captions,
                                        lengths=lengths,
                                        batch_first=True)[0]
         # Forward, backward and optimize
         features = encoder(images)
-        outputs, alphas = decoder(captions[:, :-1], lengths, features)
+        outputs = decoder(captions, lengths, features)
         loss = criterion(outputs, targets)
-        alpha_c = 1.
-        loss += alpha_c * ((1. - alphas.sum(dim=1))**2).mean()
         decoder.zero_grad()
         encoder.zero_grad()
         loss.backward()
@@ -450,7 +402,6 @@ def train_factual(encoder, decoder, optimizer, criterion, data_loader, log_step,
         del all_captions
         del targets
         del outputs
-        del alphas
 
     torch.cuda.empty_cache()
 
@@ -468,7 +419,6 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
     start = time.time()
 
     for j in range(len(tags)):
-
         # references (true captions) for calculating BLEU-4 score
         references = list()
         # hypotheses (predictions)
@@ -478,22 +428,19 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
             # Set mini-batch dataset
             images = images.to(device)
             captions = captions.to(device)
-            lengths = [l - 1 for l in lengths]
-            packed_targets = pack_padded_sequence(input=captions[:, 1:],
+            packed_targets = pack_padded_sequence(input=captions,
                                                   lengths=lengths,
                                                   batch_first=True)
             targets = packed_targets.data
             # Forward, backward and optimize
             with torch.no_grad():
                 features = encoder(images)
-                outputs, alphas = decoder(captions[:, :-1],
-                                          lengths,
-                                          features,
-                                          teacher_forcing_ratio=0,
-                                          mode=tags[j])
+                outputs = decoder(captions,
+                                  lengths,
+                                  features,
+                                  teacher_forcing_ratio=0,
+                                  mode=tags[j])
             loss = criterion(outputs, targets)
-            alpha_c = 1.
-            loss += alpha_c * ((1. - alphas.sum(dim=1))**2).mean()
 
             # Keep track of metrics
             losses[j].update(loss.item(), sum(lengths))
@@ -523,7 +470,6 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
             hypotheses.extend(preds)
 
             assert len(references) == len(hypotheses)
-
             # free
             del images
             del captions
@@ -531,7 +477,6 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
             del all_captions
             del packed_targets
             del outputs
-            del alphas
 
         torch.cuda.empty_cache()
 
@@ -540,12 +485,11 @@ def val_emotion(encoder, decoder, vocab, criterion, data_loaders, tags):
         bleu4s.append(bleu4)
 
         feature = features[0].unsqueeze(0)
-
-        start = vocab.word2idx['<start>']
-        end = vocab.word2idx['<end>']
+        start_token = vocab.word2idx['<start>']
+        end_token = vocab.word2idx['<end>']
         sampled_ids = decoder.sample(feature,
-                                     start_token=start,
-                                     end_token=end,
+                                     start_token=start_token,
+                                     end_token=end_token,
                                      mode=tags[j])
         sampled_ids = sampled_ids[0].cpu().numpy()
 
@@ -579,27 +523,19 @@ def train_emotion(encoder, decoder, optimizer, criterion, data_loaders, tags,
             # Set mini-batch dataset
             images = images.to(device)
             captions = captions.to(device)
-            lengths = [l - 1 for l in lengths]
-            targets = pack_padded_sequence(input=captions[:, 1:],
+            targets = pack_padded_sequence(input=captions,
                                            lengths=lengths,
                                            batch_first=True)[0]
             # Forward, backward and optimize
             features = encoder(images)
-            outputs, alphas = decoder(captions[:, :-1],
-                                      lengths,
-                                      features,
-                                      mode=tags[j])
+            outputs = decoder(captions, lengths, features, mode=tags[j])
             loss = criterion(outputs, targets)
-            alpha_c = 1.
-            loss += alpha_c * ((1. - alphas.sum(dim=1))**2).mean()
-
             decoder.zero_grad()
             # encoder.zero_grad()
             loss.backward()
             # Clip gradients
             clip_gradient(optimizer, grad_clip)
             optimizer.step()
-            # optimizer[j].step()
 
             if i % log_step == 0:
                 print("""Step [{}/{}], [{}], Loss: {:.4f}""".format(
@@ -615,7 +551,6 @@ def train_emotion(encoder, decoder, optimizer, criterion, data_loaders, tags,
             del all_captions
             del targets
             del outputs
-            del alphas
 
         torch.cuda.empty_cache()
 
@@ -634,6 +569,7 @@ if __name__ == '__main__':
                         type=str,
                         default='models/',
                         help='path for saving trained models')
+    parser.add_argument('--mode', type=str, default='happy')
     parser.add_argument('--vocab_path',
                         type=str,
                         default='data/flickr8k_id/vocab.pkl',
@@ -680,13 +616,11 @@ if __name__ == '__main__':
     parser.add_argument('--log_step_emotion', type=int, default=5)
     parser.add_argument('--crop_size', type=int, default=224)
     parser.add_argument('--grad_clip', type=float, default=0.5)
-    parser.add_argument('--emo_id', type=int, default=0)
 
     # Model parameters
     parser.add_argument('--embed_size', type=int, default=300)
     parser.add_argument('--hidden_size', type=int, default=512)
     parser.add_argument('--factored_size', type=int, default=512)
-    parser.add_argument('--attention_size', type=int, default=512)
     parser.add_argument('--dropout', type=float, default=0.5)
 
     parser.add_argument('--num_epochs', type=int, default=120)

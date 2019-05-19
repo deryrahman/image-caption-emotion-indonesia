@@ -60,8 +60,9 @@ def clip_gradient(optimizer, grad_clip):
                 param.grad.data.clamp_(-grad_clip, grad_clip)
 
 
-def save_checkpoint(folder, data_name, epoch, epochs_since_improvement, encoder,
-                    decoder, optimizer, lang_optimizer, bleu4, is_best):
+def save_checkpoint(folder, data_name, mode, epoch, epochs_since_improvement,
+                    encoder, decoder, optimizer, lang_optimizer, bleu4,
+                    is_best):
     """
     Saves model checkpoint.
     :param data_name: base name of processed dataset
@@ -81,11 +82,11 @@ def save_checkpoint(folder, data_name, epoch, epochs_since_improvement, encoder,
         'optimizer': optimizer,
         'lang_optimizer': lang_optimizer
     }
-    filename = folder + '/checkpoint_' + data_name + '.pth.tar'
+    filename = folder + '/' + mode + '_checkpoint_' + data_name + '.pth.tar'
     torch.save(state, filename)
     # If this checkpoint is the best so far, store a copy so it doesn't get overwritten by a worse checkpoint
     if is_best:
-        filename = folder + '/BEST_checkpoint_' + data_name + '.pth.tar'
+        filename = folder + '/' + mode + '_BEST_checkpoint_' + data_name + '.pth.tar'
         torch.save(state, filename)
 
 

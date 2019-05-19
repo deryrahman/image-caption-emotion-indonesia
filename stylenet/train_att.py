@@ -680,7 +680,7 @@ if __name__ == '__main__':
     parser.add_argument('--log_step_emotion', type=int, default=5)
     parser.add_argument('--crop_size', type=int, default=224)
     parser.add_argument('--grad_clip', type=float, default=0.5)
-    parser.add_argument('--emo_id', type=str, default=0)
+    parser.add_argument('--emo_id', type=int, default=0)
 
     # Model parameters
     parser.add_argument('--embed_size', type=int, default=300)

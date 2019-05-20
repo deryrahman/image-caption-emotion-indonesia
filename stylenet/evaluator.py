@@ -1,147 +1,128 @@
-import torch
-# import matplotlib.pyplot as plt
-# import numpy as np
 import argparse
-import pickle
-from torchvision import transforms
-from build_vocab import Vocabulary
-from model import EncoderCNN, DecoderFactoredLSTM
-from PIL import Image
+import torch
+import torch.nn as nn
+import numpy as np
 import os
+import pickle
+import random
+import time
+from data_loader import get_loader
+from build_vocab import Vocabulary
+from model_att import EncoderCNN, DecoderFactoredLSTMAtt
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, PackedSequence
+from torchvision import transforms
+from utils import AverageMeter, accuracy, adjust_learning_rate, clip_gradient, save_checkpoint
+from nltk.translate.bleu_score import corpus_bleu
 
 # Device configuration
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+checkpoint_path = './models/stylenet_multitask_att_4_complete/ANG_BEST_checkpoint_stylenet_multitask_att_4.pth.tar'
+mode = 'angry'
+image_dir = '/Users/dery/Documents/final_project/dataset/flickr30k/flickr30k_images'
+test_path = '/Users/dery/Documents/final_project/13515097-stylenet/data/flickr8k_id/angry/test.txt'
+vocab_path = '/Users/dery/Documents/final_project/13515097-stylenet/data/flickr8k_id/vocab_051819_4.pkl'
+language_batch_size = 96
+num_workers = 0
 
-def load_image(image_path, transform=None):
-    image = Image.open(image_path)
+# Image preprocessing, normalization for the pretrained resnet
+transform = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+    transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+])
 
-    if transform is not None:
-        image = transform(image).unsqueeze(0)
+torch.nn.Module.dump_patches = True
+checkpoint = torch.load(checkpoint_path, map_location='cpu')
+last_epoch = checkpoint['epoch']
+decoder = checkpoint['decoder']
+encoder = checkpoint['encoder']
+print('last_epoch', last_epoch)
 
-    return image
+# Load vocabulary wrapper
+with open(vocab_path, 'rb') as f:
+    vocab = pickle.load(f)
 
+test_data_loader = get_loader(image_dir,
+                              test_path,
+                              vocab,
+                              transform,
+                              language_batch_size,
+                              shuffle=False,
+                              num_workers=num_workers)
 
-def main(args):
-    # Image preprocessing
-    transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-    ])
+decoder.eval()
+encoder.eval()
 
-    # Load vocabulary wrapper
-    with open(args.vocab_path, 'rb') as f:
-        vocab = pickle.load(f)
-    if not os.path.exists(args.result_dir):
-        os.makedirs(args.result_dir)
+batch_time = AverageMeter()
+loss_avg = AverageMeter()
+top5acc = AverageMeter()
+bleu4 = []
+start = time.time()
 
-    # load dataset
-    cap_l = []
-    with open(args.test_caption_path, 'r') as f:
-        cap_l = f.readlines()
+# references (true captions) for calculating BLEU-4 score
+references = list()
+# hypotheses (predictions)
+hypotheses = list()
+for i, (images, captions, lengths, all_captions) in enumerate(test_data_loader):
+    # Set mini-batch dataset
+    images = images.to(device)
+    captions = captions.to(device)
+    lengths = [l - 1 for l in lengths]
+    packed_targets = pack_padded_sequence(input=captions[:, 1:],
+                                          lengths=lengths,
+                                          batch_first=True)
+    targets = packed_targets.data
+    # Forward, backward and optimize
+    with torch.no_grad():
+        features = encoder(images)
 
-    # Build models
-    encoder = EncoderCNN(args.embed_size).eval(
-    )  # eval mode (batchnorm uses moving mean/variance)
-    decoder = DecoderFactoredLSTM(args.embed_size,
-                                  args.hidden_size, args.factored_size,
-                                  len(vocab), args.num_layers)
-    encoder = encoder.to(device)
-    decoder = decoder.to(device)
+    start = vocab.word2idx['<start>']
+    end = vocab.word2idx['<end>']
+    for feature, caps in zip(features, all_captions):
+        feature = feature.unsqueeze(0)
 
-    # Load the trained model parameters
-    encoder.load_state_dict(torch.load(args.encoder_path, map_location=device))
-    decoder.load_state_dict(torch.load(args.decoder_path, map_location=device))
-
-    text = ''
-    text_ref = ''
-    for li in cap_l:
-        # Prepare an image
-        fn = li.split('#')[0]
-        ref = li.split('\t')[-1]
-        text_ref += ref
-        image = load_image(args.test_image_dir + '/' + fn, transform)
-        image_tensor = image.to(device)
-
-        # Generate an caption from the image
-        feature = encoder(image_tensor)
-        sampled_ids = decoder.sample(feature, mode=args.mode)
-
-        # (1, max_seq_length) -> (max_seq_length)
+        sampled_ids = decoder.sample(feature,
+                                     start_token=start,
+                                     end_token=end,
+                                     mode=mode)
         sampled_ids = sampled_ids[0].cpu().numpy()
+        caps = [c.long().tolist() for c in caps]
+        references.append(caps)
 
-        # Convert word_ids to words
+        sampled_caption = []
+        for word_id in caps[0]:
+            word = vocab.idx2word[word_id]
+            sampled_caption.append(word)
+            if word == '<end>':
+                break
+        print('ref', ' '.join(sampled_caption))
+
         sampled_caption = []
         for word_id in sampled_ids:
             word = vocab.idx2word[word_id]
             sampled_caption.append(word)
             if word == '<end>':
                 break
-        sentence = ' '.join(sampled_caption)
-        sentence = sentence.replace('<start>', '')
-        sentence = sentence.replace('<end>', '')
-        sentence = sentence.strip()
+        print('pred', ' '.join(sampled_caption))
 
-        # Print out the image and the generated caption
-        print(sentence)
-        text += sentence + '\n'
-        # image = Image.open(args.image)
-        # plt.imshow(np.asarray(image))
-    with open(args.result_dir + '/hyp.txt', 'w') as f:
-        f.write(text)
-    with open(args.result_dir + '/ref.txt', 'w') as f:
-        f.write(text_ref)
+        hypotheses.append(sampled_ids)
 
+assert len(references) == len(hypotheses)
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--test_image_dir',
-                        type=str,
-                        default=('/Users/dery/Documents/final_project/'
-                                 '13515097-stylenet/dataset/flickr30k/img'),
-                        help='directory for test images')
-    parser.add_argument('--test_caption_path',
-                        type=str,
-                        default='data/flickr8k_id/happy/train_supervised.txt',
-                        help='path for test txt file')
-    parser.add_argument('--result_dir',
-                        type=str,
-                        default='result/flickr8k_id/happy/',
-                        help='path for test txt file')
-    parser.add_argument('--encoder_path',
-                        type=str,
-                        default='models/encoder-2-1000.ckpt',
-                        help='path for trained encoder')
-    parser.add_argument('--decoder_path',
-                        type=str,
-                        default='models/decoder-2-1000.ckpt',
-                        help='path for trained decoder')
-    parser.add_argument('--vocab_path',
-                        type=str,
-                        default='data/vocab.pkl',
-                        help='path for vocabulary wrapper')
-    parser.add_argument('--mode',
-                        type=str,
-                        default='factual',
-                        help='mode for language generation')
-
-    # Model parameters (should be same as paramters in train.py)
-    parser.add_argument('--embed_size',
-                        type=int,
-                        default=300,
-                        help='dimension of word embedding vectors')
-    parser.add_argument('--hidden_size',
-                        type=int,
-                        default=512,
-                        help='dimension of lstm hidden states')
-    parser.add_argument('--factored_size',
-                        type=int,
-                        default=512,
-                        help='dimension of lstm hidden states')
-    parser.add_argument('--num_layers',
-                        type=int,
-                        default=1,
-                        help='number of layers in lstm')
-    args = parser.parse_args()
-    main(args)
+bleu_1 = corpus_bleu(list_of_references=references,
+                     hypotheses=hypotheses,
+                     weights=(1, 0, 0, 0))
+bleu_2 = corpus_bleu(list_of_references=references,
+                     hypotheses=hypotheses,
+                     weights=(0.5, 0.5, 0, 0))
+bleu_3 = corpus_bleu(list_of_references=references,
+                     hypotheses=hypotheses,
+                     weights=(0.33, 0.33, 0.33, 0))
+bleu_4 = corpus_bleu(list_of_references=references,
+                     hypotheses=hypotheses,
+                     weights=(0.25, 0.25, 0.2))
+print('BLEU-1', bleu_1)
+print('BLEU-2', bleu_2)
+print('BLEU-3', bleu_3)
+print('BLEU-4', bleu_4)

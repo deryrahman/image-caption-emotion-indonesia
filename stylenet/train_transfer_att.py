@@ -94,19 +94,19 @@ def main(args):
             p += list(decoder.S_happy_f.parameters())
             p += list(decoder.S_happy_o.parameters())
             p += list(decoder.S_happy_c.parameters())
-            # p += list(decoder.attention_happy.parameters())
+            p += list(decoder.attention_happy.parameters())
         elif mode == 'sad':
             p = list(decoder.S_sad_i.parameters())
             p += list(decoder.S_sad_f.parameters())
             p += list(decoder.S_sad_o.parameters())
             p += list(decoder.S_sad_c.parameters())
-            # p += list(decoder.attention_sad.parameters())
+            p += list(decoder.attention_sad.parameters())
         elif mode == 'angry':
             p = list(decoder.S_angry_i.parameters())
             p += list(decoder.S_angry_f.parameters())
             p += list(decoder.S_angry_o.parameters())
             p += list(decoder.S_angry_c.parameters())
-            # p += list(decoder.attention_angry.parameters())
+            p += list(decoder.attention_angry.parameters())
         else:
             sys.stderr.write("mode name wrong!")
         lang_params = p

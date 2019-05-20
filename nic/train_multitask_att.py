@@ -183,8 +183,8 @@ def main(args):
         # Decay learning rate if there is no improvement for 4 consecutive epochs, and terminate training after 10
         imp_fac = epochs_since_improvement['factual']
         imp_emo = epochs_since_improvement['emotion']
-        if imp_fac >= 10 and imp_emo >= 10:
-            break
+        # if imp_fac >= 10 and imp_emo >= 10:
+        #     break
         if imp_fac > 0 and imp_fac % 4 == 0:
             adjust_learning_rate(optimizer, 0.8)
         if imp_emo > 0 and imp_emo % 4 == 0:

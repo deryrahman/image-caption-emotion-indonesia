@@ -334,8 +334,9 @@ class DecoderFactoredLSTMAtt(nn.Module):
         step = 1
         h_t, c_t = self.init_hidden_state(features)
 
-        attention = self.attention
-        if mode == 'happy':
+        if mode == 'factual':
+            attention = self.attention
+        elif mode == 'happy':
             attention = self.attention_happy
         elif mode == 'sad':
             attention = self.attention_sad

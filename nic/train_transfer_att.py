@@ -5,6 +5,7 @@ import numpy as np
 import pickle
 import random
 import time
+import sys
 from data_loader import get_loader
 from build_vocab import Vocabulary
 from model_att import EncoderCNN, DecoderRNNAtt
@@ -87,7 +88,22 @@ def main(args):
         decoder = checkpoint['decoder']
         encoder = checkpoint['encoder']
         optimizer = checkpoint['optimizer']
-        lang_params = list(decoder.parameters())
+        if mode == 'happy':
+            p = list(decoder.lstm.parameters())
+            p += list(decoder.attention_happy.parameters())
+        elif mode == 'sad':
+            p = list(decoder.lstm.parameters())
+            p += list(decoder.attention_sad.parameters())
+        elif mode == 'angry':
+            p = list(decoder.lstm.parameters())
+            p += list(decoder.attention_angry.parameters())
+        else:
+            sys.stderr.write("mode name wrong!")
+        lang_params = p
+        # lang_params += list(decoder.embed.parameters())
+        lang_params += list(decoder.f_beta.parameters())
+        lang_params += list(decoder.sigmoid.parameters())
+        lang_params += list(decoder.linear.parameters())
         lang_optimizer = torch.optim.Adam(lang_params, lr=lr_language)
         print('load fac', checkpoint_path)
     else:

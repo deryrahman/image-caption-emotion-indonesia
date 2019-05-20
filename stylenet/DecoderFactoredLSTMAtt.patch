@@ -1,0 +1,14 @@
+--- /datadrive/final_project/13515097-stylenet/stylenet/model_att.py
++++ /datadrive/final_project/13515097-stylenet/stylenet/model_att.py
+@@ -262,9 +262,8 @@
+         step = 1
+         h_t, c_t = self.init_hidden_state(features)
+ 
+-        if mode == 'factual':
+-            attention = self.attention
+-        elif mode == 'happy':
++        attention = self.attention
++        if mode == 'happy':
+             attention = self.attention_happy
+         elif mode == 'sad':
+             attention = self.attention_sad

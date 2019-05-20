@@ -90,13 +90,13 @@ def main(args):
         optimizer = checkpoint['optimizer']
         if mode == 'happy':
             p = list(decoder.lstm.parameters())
-            # p += list(decoder.attention_happy.parameters())
+            p += list(decoder.attention_happy.parameters())
         elif mode == 'sad':
             p = list(decoder.lstm.parameters())
-            # p += list(decoder.attention_sad.parameters())
+            p += list(decoder.attention_sad.parameters())
         elif mode == 'angry':
             p = list(decoder.lstm.parameters())
-            # p += list(decoder.attention_angry.parameters())
+            p += list(decoder.attention_angry.parameters())
         else:
             sys.stderr.write("mode name wrong!")
         lang_params = p
@@ -110,7 +110,7 @@ def main(args):
         checkpoint = torch.load(checkpoint_path)
         start_epoch = checkpoint['epoch'] + 1
         epochs_since_improvement = checkpoint['epochs_since_improvement']
-        best_bleu4 = checkpoint['bleu-4']
+        best_bleu4 = {'factual': 0., 'emotion': 0.}
         decoder = checkpoint['decoder']
         encoder = checkpoint['encoder']
         optimizer = checkpoint['optimizer']

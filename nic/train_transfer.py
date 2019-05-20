@@ -105,7 +105,7 @@ def main(args):
         checkpoint = torch.load(checkpoint_path)
         start_epoch = checkpoint['epoch'] + 1
         epochs_since_improvement = checkpoint['epochs_since_improvement']
-        best_bleu4 = checkpoint['bleu-4']
+        best_bleu4 = {'factual': 0., 'emotion': 0.}
         decoder = checkpoint['decoder']
         encoder = checkpoint['encoder']
         optimizer = checkpoint['optimizer']

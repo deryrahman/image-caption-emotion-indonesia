@@ -265,7 +265,7 @@ class DecoderFactoredLSTMAtt(nn.Module):
 
         if mode == 'factual':
             attention = self.attention
-        if mode == 'happy':
+        elif mode == 'happy':
             attention = self.attention_happy
         elif mode == 'sad':
             attention = self.attention_sad

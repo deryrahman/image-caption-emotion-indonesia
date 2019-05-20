@@ -81,6 +81,7 @@ def main(args):
     criterion = nn.CrossEntropyLoss()
 
     if is_fac:
+        torch.nn.Module.dump_patches = True
         checkpoint = torch.load(checkpoint_path)
         start_epoch = 0
         epochs_since_improvement = checkpoint['epochs_since_improvement']

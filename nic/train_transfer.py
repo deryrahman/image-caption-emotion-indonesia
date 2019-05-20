@@ -98,7 +98,7 @@ def main(args):
             sys.stderr.write("mode name wrong!")
         lang_params = p
         # lang_params += list(decoder.embed.parameters())
-        lang_params += list(decoder.linear.parameters())
+        # lang_params += list(decoder.linear.parameters())
         lang_optimizer = torch.optim.Adam(lang_params, lr=lr_language)
         print('load fac', checkpoint_path)
     else:

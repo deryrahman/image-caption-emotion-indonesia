@@ -90,13 +90,13 @@ def main(args):
         optimizer = checkpoint['optimizer']
         if mode == 'happy':
             p = list(decoder.lstm.parameters())
-            p += list(decoder.attention_happy.parameters())
+            # p += list(decoder.attention_happy.parameters())
         elif mode == 'sad':
             p = list(decoder.lstm.parameters())
-            p += list(decoder.attention_sad.parameters())
+            # p += list(decoder.attention_sad.parameters())
         elif mode == 'angry':
             p = list(decoder.lstm.parameters())
-            p += list(decoder.attention_angry.parameters())
+            # p += list(decoder.attention_angry.parameters())
         else:
             sys.stderr.write("mode name wrong!")
         lang_params = p

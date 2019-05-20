@@ -89,26 +89,27 @@ def main(args):
         decoder = checkpoint['decoder']
         encoder = checkpoint['encoder']
         optimizer = checkpoint['optimizer']
-        if mode == 'happy':
-            p = list(decoder.S_happy_i.parameters())
-            p += list(decoder.S_happy_f.parameters())
-            p += list(decoder.S_happy_o.parameters())
-            p += list(decoder.S_happy_c.parameters())
-        elif mode == 'sad':
-            p = list(decoder.S_sad_i.parameters())
-            p += list(decoder.S_sad_f.parameters())
-            p += list(decoder.S_sad_o.parameters())
-            p += list(decoder.S_sad_c.parameters())
-        elif mode == 'angry':
-            p = list(decoder.S_angry_i.parameters())
-            p += list(decoder.S_angry_f.parameters())
-            p += list(decoder.S_angry_o.parameters())
-            p += list(decoder.S_angry_c.parameters())
-        else:
-            sys.stderr.write("mode name wrong!")
-        lang_params = p
-        # lang_params += list(decoder.B.parameters())
-        lang_params += list(decoder.C.parameters())
+        # if mode == 'happy':
+        #     p = list(decoder.S_happy_i.parameters())
+        #     p += list(decoder.S_happy_f.parameters())
+        #     p += list(decoder.S_happy_o.parameters())
+        #     p += list(decoder.S_happy_c.parameters())
+        # elif mode == 'sad':
+        #     p = list(decoder.S_sad_i.parameters())
+        #     p += list(decoder.S_sad_f.parameters())
+        #     p += list(decoder.S_sad_o.parameters())
+        #     p += list(decoder.S_sad_c.parameters())
+        # elif mode == 'angry':
+        #     p = list(decoder.S_angry_i.parameters())
+        #     p += list(decoder.S_angry_f.parameters())
+        #     p += list(decoder.S_angry_o.parameters())
+        #     p += list(decoder.S_angry_c.parameters())
+        # else:
+        #     sys.stderr.write("mode name wrong!")
+        # lang_params = p
+        # # lang_params += list(decoder.B.parameters())
+        # lang_params += list(decoder.C.parameters())
+        lang_params = list(decoder.parameters())  #
         lang_optimizer = torch.optim.Adam(lang_params, lr=lr_language)
         print('load fac', checkpoint_path)
     else:

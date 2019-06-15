@@ -1,0 +1,6 @@
+*.patch
+models
+tmp
+data
+
+.env

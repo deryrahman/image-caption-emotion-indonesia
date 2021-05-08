@@ -1,6 +1,6 @@
 Click==7.0
 Flask==1.0.3
-Flask-Cors==3.0.8
+Flask-Cors==3.0.9
 greenlet==0.4.15
 itsdangerous==1.1.0
 Jinja2==2.11.3
